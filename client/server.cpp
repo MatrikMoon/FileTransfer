@@ -21,7 +21,6 @@ void Server::sendTCP(std::string buf)
 //Start the real thread for receiving
 int Server::receive(PARSER p)
 {
-    PARSESTRUCT STRCT;
     STRCT.p = p;
     STRCT.s = this;
     int rc = pthread_create(&receiveTCPThreads[0], NULL, &Server::waitForRecvFunc, &STRCT);
