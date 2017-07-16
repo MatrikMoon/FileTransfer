@@ -15,5 +15,4 @@
 #include "commands.h"
 
 static Server server; //Our main server connection
-pthread_t threads[1];
 #endif

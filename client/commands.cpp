@@ -5,6 +5,7 @@ pthread_t udpThreads[1];
 
 int parseMessages(Server c, std::string buffer)
 {
+    printf("PARSING");
     if (strncmp(buffer.c_str(), "Server> ", 8) == 0)
     {
         buffer = &(buffer.c_str())[8];

@@ -1,4 +1,5 @@
 #include "client.h"
+#include "commands.h"
 
 int main(int argc, char *argv[])
 {
@@ -9,14 +10,12 @@ int main(int argc, char *argv[])
         exit(0);
     }
 	//Connect to server
-    server.connectTCP(argv[1], argv[2]);
+    if (server.connectTCP(argv[1], argv[2]) == 1) {
+        return 1;
+    }
 
 	//Create thread to receive data
-    int rc = pthread_create(&threads[0], NULL, waitForRecvfunc, NULL);
-    if (rc) {
-        std::cout<<"THREAD CREATION FAILED\n";
-        exit(-1);
-    }
+    server.receive(&parseMessages);
 
 	//Loop for input
     while (1) {

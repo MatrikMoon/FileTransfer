@@ -25,7 +25,7 @@ static Client *c;
 
 int main(int argc, char *argv[])
 {
-    int rc = pthread_create(&threads[0], NULL, startListeningTCP, (void *)0);
+    int rc = pthread_create(&threads[0], NULL, startListeningTCP, NULL);
     if (rc)
     {
         std::cout << "THREAD CREATION FAILED\n";
@@ -134,7 +134,7 @@ void *startListeningTCP(void *v)
     c = new Client(newsockfd);
 
     //Receive from various clients
-    while (1)
+    while (TRUE)
     {
         //Recieve
         n = read(newsockfd, buffer, 255);

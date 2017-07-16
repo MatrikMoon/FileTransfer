@@ -27,10 +27,12 @@ class Server {
 
     public:
     //Parser setup
-    typedef void (*PARSER)(Server c, std::string buffer);
+    pthread_t receiveTCPThreads[1]; //FIXME: Does this do bad thingies
+    typedef int (*PARSER)(Server c, std::string buffer);
     struct PARSESTRUCT {
+        Server *s;
         PARSER p;
-    } STRCT;
+    };
 
     //TCP
     std::string hostTCP;
@@ -40,19 +42,20 @@ class Server {
     std::string hostUDP;
     std::string portUDP;
     
+    //TCP
     int connectTCP(std::string, std::string);
     void sendTCP(std::string);
+    static void *waitForRecvFunc(void * v);
+    int receive_low(PARSER p);
     int receive(PARSER p);
     void resetTCP();
     void sendTCPIntro();
+    //UDP
     int connectUDP(std::string, std::string);
     void sendUDP(std::string);
     void receiveUDPThread();
     static void *receiveUDPThreadHelper(void *context);
     int receiveUDP();
-
-    int recvfunc(PARSER p);
-    void *waitForRecvfunc(void * p);
 };
 
 #endif
