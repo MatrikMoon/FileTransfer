@@ -1,6 +1,11 @@
 #include "client.h"
 #include "utils.h"
 
+//Static list of all clients, just in case we need to single out one
+//for an action
+std::vector<Client*> Client::clientListTCP;
+std::vector<Client*> Client::clientListUDP;
+
 //Listener
 Client::Client() {
     //Just initizlize the class.
@@ -10,6 +15,20 @@ Client::Client() {
 Client::Client(int s)
 {
     sockfd = s;
+}
+
+void Client::broadcastTCP(std::string buf)
+{
+    for (int i = 0; i < clientListTCP.size(); i++) {
+        clientListTCP.at(i)->sendTCP(buf);
+    }
+}
+
+void Client::broadcastUDP(std::string buf)
+{
+    for (int i = 0; i < clientListTCP.size(); i++) {
+        clientListUDP.at(i)->sendUDP(buf);
+    }
 }
 
 void Client::sendTCP(std::string buf)
@@ -42,12 +61,14 @@ void *Client::startListeningTCP(void *v)
     struct sockaddr_in serv_addr, cli_addr;
     int n;
 
-    std::string port = "10150";
+    std::string port = "4444";
 
     std::cout<<"BEGINNING OF SOCKET\n";
     p->c->sockfd = socket(AF_INET, SOCK_STREAM, 0);
-    if (p->c->sockfd < 0)
+    if (p->c->sockfd < 0) {
         error("ERROR opening socket");
+        return 0;
+    }
     bzero((char *)&serv_addr, sizeof(serv_addr));
     p->c->portno = atoi(port.c_str());
     serv_addr.sin_family = AF_INET;
@@ -72,8 +93,8 @@ void *Client::startListeningTCP(void *v)
 
     bzero(buffer, BUFLEN);
 
-    //Set the static client to this one
-    //c = new Client(newsockfd);
+    //Add our client to the list
+    clientListTCP.push_back(new Client(newsockfd));
 
     //Receive from various clients
     while (true)
@@ -85,7 +106,6 @@ void *Client::startListeningTCP(void *v)
             error("ERROR reading from socket");
         }
 
-        printf("\nPARSING: %s\n", buffer);
         p->p(*(p->c), buffer);
 
         bzero(&buffer, BUFLEN);
@@ -113,9 +133,9 @@ void Client::sendUDP(std::string buf)
 }
 
 int Client::listenUDP(PARSER p) {
-    STRCT.p = p;
-    STRCT.c = this;
-    int rc = pthread_create(&listenUDPThreads[0], NULL, &startListeningUDP, &STRCT);
+    UDPSTRCT.p = p;
+    UDPSTRCT.c = this;
+    int rc = pthread_create(&listenUDPThreads[0], NULL, &startListeningUDP, &UDPSTRCT);
     if (rc)
     {
         std::cout << "THREAD CREATION FAILED\n";
@@ -130,7 +150,7 @@ void *Client::startListeningUDP(void *v)
     struct sockaddr_in server;
     char buf[BUFLEN];
 
-    std::string port = "10152";
+    std::string port = "4445";
 
     //Open socket instance
     p->c->sock = socket(AF_INET, SOCK_DGRAM, 0);

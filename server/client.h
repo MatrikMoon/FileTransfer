@@ -32,12 +32,16 @@ class Client {
     struct PARSESTRUCT {
         Client *c;
         PARSER p;
-    } STRCT;
-
+    } STRCT, UDPSTRCT; //Probably should better handle this later.
+                        //Reassigning the pointer can cause sticky issues
+                        //for the listen loops.
+    
     //Static list of all clients, just in case we need to single out one
     //for an action
-    static std::vector<Client> clientListTCP;
-    static std::vector<Client> clientListUDP;
+    //This only declares, does not initialize them. Will do that
+    //in the implementation.
+    static std::vector<Client*> clientListTCP;
+    static std::vector<Client*> clientListUDP;
 
     public:
         //Listener
@@ -46,12 +50,14 @@ class Client {
         //TCP
         Client(int);
         void sendTCP(std::string);
+        static void broadcastTCP(std::string);
         int listenTCP(PARSER p);
         static void *startListeningTCP(void * v);
 
         //UDP
         Client(int, struct sockaddr_in, socklen_t);
         void sendUDP(std::string);
+        static void broadcastUDP(std::string);
         int listenUDP(PARSER p);
         static void *startListeningUDP(void * v);
 };
