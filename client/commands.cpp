@@ -1,8 +1,6 @@
 #include "commands.h"
 #include "utils.h"
 
-pthread_t udpThreads[1];
-
 int parseMessages(Server c, std::string buffer)
 {
     printf("PARSING");
@@ -18,10 +16,7 @@ int parseMessages(Server c, std::string buffer)
         sends += &buf[5];
         c.connectUDP(c.hostTCP, "10152");
 
-        int rc = pthread_create(&udpThreads[0], NULL, &Server::receiveUDPThreadHelper, &c);
-        if (rc) {
-            std::cout<<"THREAD CREATION FAILED\n";
-        }
+        c.receiveUDP(&parseUDPMessages);
 
         c.sendUDP(sends);
     }
@@ -104,7 +99,7 @@ int parseMessages(Server c, std::string buffer)
     return 0;
 }
 
-bool parseUDPMessages(Server c, std::string recv)
+int parseUDPMessages(Server c, std::string recv)
 {
     if (strncmp(recv.c_str(), "/cursor_stream", 14) == 0)
     {                                                       ///////////////////-----------IMPORTANT NOTE: Only high-priority commands may reside here.
@@ -152,9 +147,9 @@ bool parseUDPMessages(Server c, std::string recv)
         m_rmouseUp();
     }
     else
-        return false;
+        return 1;
 
-    return true;
+    return 0;
 }
 
 int *getDesktopResolution()

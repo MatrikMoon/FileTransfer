@@ -32,7 +32,7 @@ int main(int argc, char *argv[])
         exit(-1);
     }
 
-    while (1)
+    while (true)
     {
         char buffer[256];
         printf("\n");
@@ -53,7 +53,7 @@ void *startListening(void *v)
     struct sockaddr_in from;
     char buf[1024];
 
-    std::string port = "4444";
+    std::string port = "10152";
 
     //Open socket instance
     sock = socket(AF_INET, SOCK_DGRAM, 0);
@@ -100,7 +100,7 @@ void *startListeningTCP(void *v)
     struct sockaddr_in serv_addr, cli_addr;
     int n;
 
-    std::string port = "4449";
+    std::string port = "10150";
 
     std::cout<<"BEGINNING OF SOCKET\n";
     sockfd = socket(AF_INET, SOCK_STREAM, 0);

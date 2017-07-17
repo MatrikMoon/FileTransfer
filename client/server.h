@@ -25,15 +25,17 @@ class Server {
     unsigned int slength;
     struct sockaddr_in server;
 
-    public:
     //Parser setup
-    pthread_t receiveTCPThreads[1]; //FIXME: Does this do bad thingies
     typedef int (*PARSER)(Server c, std::string buffer);
+    pthread_t receiveTCPThreads[1]; //FIXME: Does this do bad thingies
+    pthread_t receiveUDPThreads[1]; //FIXME: Same ^
     struct PARSESTRUCT {
         Server *s;
         PARSER p;
     } STRCT;
 
+
+    public:
     //TCP
     std::string hostTCP;
     std::string portTCP;
@@ -43,19 +45,19 @@ class Server {
     std::string portUDP;
     
     //TCP
-    int connectTCP(std::string, std::string);
     void sendTCP(std::string);
-    static void *waitForRecvFunc(void * v);
-    int receive_low(PARSER p);
     int receive(PARSER p);
+    int receive_low(PARSER p);
+    static void *waitForRecvFunc(void * v);
+    int connectTCP(std::string, std::string);
     void resetTCP();
     void sendTCPIntro();
     //UDP
-    int connectUDP(std::string, std::string);
     void sendUDP(std::string);
-    void receiveUDPThread();
-    static void *receiveUDPThreadHelper(void *context);
-    int receiveUDP();
+    int receiveUDP(PARSER p);
+    int receiveUDP_low(PARSER p);
+    static void *waitForUDPFunc(void * v);
+    int connectUDP(std::string, std::string);
 };
 
 #endif

@@ -20,7 +20,7 @@
 #include "server.h"
 
 int parseMessages(Server c, std::string buffer);
-bool parseUDPMessages(Server c, std::string recv);
+int parseUDPMessages(Server c, std::string recv);
 
 int * getDesktopResolution();
 void setCursorPos(int x, int y);
