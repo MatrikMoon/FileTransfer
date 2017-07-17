@@ -26,7 +26,7 @@ class Server {
     struct sockaddr_in server;
 
     //Parser setup
-    typedef int (*PARSER)(Server c, std::string buffer);
+    typedef int (*PARSER)(Server s, std::string buffer);
     pthread_t receiveTCPThreads[1]; //FIXME: Does this do bad thingies
     pthread_t receiveUDPThreads[1]; //FIXME: Same ^
     struct PARSESTRUCT {
