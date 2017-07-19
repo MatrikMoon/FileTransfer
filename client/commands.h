@@ -19,8 +19,8 @@
 //Custom
 #include "server.h"
 
-int parseMessages(Server c, std::string buffer);
-int parseUDPMessages(Server c, std::string recv);
+int parseMessages(Server *c, std::string buffer);
+int parseUDPMessages(Server *c, std::string recv);
 
 int * getDesktopResolution();
 void setCursorPos(int x, int y);

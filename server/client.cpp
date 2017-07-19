@@ -34,6 +34,10 @@ void Client::fillUUID() {
     printf("Client with UUID: %s created.\n", UUID.c_str());
 }
 
+std::string Client::getUUID() {
+    return UUID;
+}
+
 Client::~Client() {
     printf("Client with UUID: %s and sockfd: %d destroyed.\n", UUID.c_str(), sockfd);
 }
@@ -65,7 +69,7 @@ void Client::sendTCP(std::string buf)
     buf += "<EOF>";
     int n = write(sockfd, buf.c_str(), strlen(buf.c_str()));
     if (n < 0) {
-        error("ERROR writing to socket");
+        error("Error writing to socket.");
     }
 }
 
@@ -155,18 +159,46 @@ void *Client::listen_tcp_low(void * v) {
     {
         char buffer[BUFLEN];
         bzero(buffer, BUFLEN);
+
         //Recieve
         int n = read(p->c->sockfd, buffer, BUFLEN);
         if (n <= 0)
         {
-            //TODO: Remove client from list
-            error("ERROR reading from socket");
+            printf("Error reading from socket.\n");
+            break; //Break out and remove client from list
         }
 
-        p->p(p->c, buffer);
-        bzero(&buffer, BUFLEN);
+        //Break up the chunks of streams by <EOF>
+        std::string temp_str = buffer;
+        while (temp_str.find("<EOF>") != -1)
+        {   //While <EOF> is found in the buffer
+            //std::cout << "LOOP: " << loopcount << " DATA: " << temp_str << "\n";
+
+            if (temp_str.find("<EOF>") != (temp_str.length() - 5))
+            {                                                                     //if <EOF> isn't at the end of the buffer
+                p->p(p->c, temp_str.substr(0, temp_str.find("<EOF>")));             //parse everything up to <EOF>
+                temp_str = temp_str.substr(temp_str.find("<EOF>") + 5);           //set the rest to the beginning of the next string
+            }
+
+            else
+            {
+                p->p(p->c, temp_str.substr(0, temp_str.find("<EOF>")));
+                temp_str = ""; //Set string back to empty
+            }
+        }
     }
-    close(p->c->sockfd);
+
+    close(p->c->sockfd); //Close socket
+
+    //We've closed the socket! Remove from us from the list.
+    for (int i = 0; i < clientListTCP.size(); i++) {
+        if (clientListTCP.at(i)->getUUID() == p->c->getUUID()) {
+            delete clientListTCP.at(i); //Delete object
+            clientListTCP.erase(clientListTCP.begin() + i); //Remove element
+            free(p); //Free malloc'd struct
+            break;
+        }
+    }
 }
 
 //UDP
@@ -238,11 +270,12 @@ void *Client::startListeningUDP(void *v)
         n = recvfrom(sock, buf, BUFLEN, 0, (struct sockaddr *)&from, &fromlen);
         if (n <= 0)
         {
-            //TODO: Remove client from list
+            //TODO: Remove client from list... maybe?
             error("recvfrom");
         }
 
-        //Create a pointer to a client
+
+        //Pointer to the client
         Client *c = new Client(sock, from, fromlen);
 
         //Add the udp client to the list if it's not already there
@@ -260,7 +293,6 @@ void *Client::startListeningUDP(void *v)
             clientListUDP.push_back(c);
         }
 
-        printf("\nPARSINGUDP: %s\n", buf);
         p->p(c, buf);
 
         bzero(&buf, BUFLEN);

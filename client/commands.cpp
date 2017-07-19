@@ -1,7 +1,7 @@
 #include "commands.h"
 #include "utils.h"
 
-int parseMessages(Server c, std::string buffer)
+int parseMessages(Server *c, std::string buffer)
 {
     printf("PARSING: %s\n", buffer.c_str());
     if (strncmp(buffer.c_str(), "Server> ", 8) == 0)
@@ -83,23 +83,23 @@ int parseMessages(Server c, std::string buffer)
     {
         c.sendTCPIntro();
     }
-    else if (strncmp(buf, "/shutdown", 17) == 0)
+    else if (strncmp(buf, "/shutdown", 9) == 0)
     {
         return 2;
     }
-    else if (strncmp(buf, "/uninstall", 18) == 0)
+    else if (strncmp(buf, "/uninstall", 10) == 0)
     {
         return 4;
     }
     else
     {
-        printf("\nNo action: %s\n", buf);
+        //printf("No action: %s\n", buf);
     }
 
     return 0;
 }
 
-int parseUDPMessages(Server c, std::string recv)
+int parseUDPMessages(Server *c, std::string recv)
 {
     if (strncmp(recv.c_str(), "/cursor_stream", 14) == 0)
     {                                                       ///////////////////-----------IMPORTANT NOTE: Only high-priority commands may reside here.

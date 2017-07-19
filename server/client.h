@@ -46,10 +46,11 @@ class Client {
     //This only declares, does not initialize them. Will do that
     //in the implementation.
     static std::vector<Client*> clientListTCP;
-    static std::vector<Client*> clientListUDP;
+    static std::vector<Client*> clientListUDP; //Todo: New data structure?
 
     public:
         //Misc
+        std::string getUUID();
         void fillUUID();
 
         //Both

@@ -126,13 +126,13 @@ int Server::receive_low(PARSER p) {
 
                     if (temp_str.find("<EOF>") != (temp_str.length() - 5))
                     {                                                                     //if <EOF> isn't at the end of the buffer
-                        p(*this, temp_str.substr(0, temp_str.find("<EOF>")));             //parse everything up to <EOF>
+                        p(this, temp_str.substr(0, temp_str.find("<EOF>")));             //parse everything up to <EOF>
                         temp_str = temp_str.substr(temp_str.find("<EOF>") + 5);           //set the rest to the beginning of the next string
                     }
 
                     else
                     {
-                        ret = p(*this, temp_str.substr(0, temp_str.find("<EOF>")));
+                        ret = p(this, temp_str.substr(0, temp_str.find("<EOF>")));
                         temp_str = "";
                         cont = false; //Maybe not necessary?
                     }
