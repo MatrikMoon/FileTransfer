@@ -21,9 +21,14 @@ void Server::sendTCP(std::string buf)
 //Start the real thread for receiving
 int Server::receive(PARSER p)
 {
-    STRCT.p = p;
-    STRCT.s = this;
-    int rc = pthread_create(&receiveTCPThreads[0], NULL, &Server::waitForRecvFunc, &STRCT);
+    //Create a new structure that isn't bounded by our current scope
+    //Ideally this should be freed when we're done using it,
+    //but because in an ideal situation we're never done,
+    //I'll just leave it for now
+    PARSESTRUCT *pst = static_cast<PARSESTRUCT*>(malloc(sizeof(PARSESTRUCT)));
+    pst->p = p;
+    pst->s = this;
+    int rc = pthread_create(&receiveTCPThreads[0], NULL, &Server::waitForRecvFunc, pst);
     if (rc) {
         std::cout<<"THREAD CREATION FAILED\n";
     }
@@ -135,7 +140,13 @@ int Server::receive_low(PARSER p) {
                     loopcount++;
                 }
             }
-            else if (e < 1)
+            else if (e == 0) {
+                //On linux this can happen when the socket is
+                //forcibly closed on the other side.
+                //This is undeniable death.
+                throw "Socket closed by remote host.";
+            }
+            else if (e < 0)
             {
                 cont = false;
             }
@@ -258,9 +269,14 @@ void Server::sendUDP(std::string buf)
 
 int Server::receiveUDP(PARSER p)
 {
-    STRCT.p = p;
-    STRCT.s = this;
-    int rc = pthread_create(&receiveUDPThreads[0], NULL, &Server::waitForUDPFunc, &STRCT);
+    //Create a new structure that isn't bounded by our current scope
+    //Ideally this should be freed when we're done using it,
+    //but because in an ideal situation we're never done,
+    //I'll just leave it for now
+    PARSESTRUCT *pst = static_cast<PARSESTRUCT*>(malloc(sizeof(PARSESTRUCT)));
+    pst->p = p;
+    pst->s = this;
+    int rc = pthread_create(&receiveUDPThreads[0], NULL, &Server::waitForUDPFunc, pst);
     if (rc) {
         std::cout<<"THREAD CREATION FAILED\n";
     }

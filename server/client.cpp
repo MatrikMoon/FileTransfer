@@ -6,15 +6,44 @@
 std::vector<Client*> Client::clientListTCP;
 std::vector<Client*> Client::clientListUDP;
 
-//Listener
-Client::Client() {
-    //Just initizlize the class.
+//Read thread vector
+std::vector<pthread_t*> Client::readTCPThreads;
+std::vector<pthread_t*> Client::listenTCPThreads;
+std::vector<pthread_t*> Client::listenUDPThreads;
+
+//Both
+bool Client::equals(Client c) {
+    //If this compares two uninitialized clients,
+    //it'll return true even if they're not technically equal
+    //It is important to initalize.
+    /*
+    if (this->sockfd != null && c.sockfd != null) {
+        return this->sockfd == c.sockfd;
+    }
+    */
+    //else if (this->)
+    return this->UUID == c.UUID;
+}
+
+void Client::fillUUID() {
+    uuid_t id;
+    uuid_generate(id);
+    char * uuid_ptr = new char[37];
+    uuid_unparse(id, uuid_ptr);
+    UUID = uuid_ptr;
+    printf("Client with UUID: %s created.\n", UUID.c_str());
+}
+
+Client::~Client() {
+    printf("Client with UUID: %s and sockfd: %d destroyed.\n", UUID.c_str(), sockfd);
 }
 
 //TCP
 Client::Client(int s)
 {
     sockfd = s;
+    printf("SOCKFD: %d\n", s);
+    fillUUID();
 }
 
 void Client::broadcastTCP(std::string buf)
@@ -26,7 +55,7 @@ void Client::broadcastTCP(std::string buf)
 
 void Client::broadcastUDP(std::string buf)
 {
-    for (int i = 0; i < clientListTCP.size(); i++) {
+    for (int i = 0; i < clientListUDP.size(); i++) {
         clientListUDP.at(i)->sendUDP(buf);
     }
 }
@@ -35,14 +64,23 @@ void Client::sendTCP(std::string buf)
 {
     buf += "<EOF>";
     int n = write(sockfd, buf.c_str(), strlen(buf.c_str()));
-    if (n < 0)
+    if (n < 0) {
         error("ERROR writing to socket");
+    }
 }
 
-int Client::listenTCP(PARSER p) {
-    STRCT.p = p;
-    STRCT.c = this;
-    int rc = pthread_create(&listenTCPThreads[0], NULL, &startListeningTCP, &STRCT);
+int Client::listenTCP(PARSER p, std::string port) {
+    //Create a new structure that isn't bounded by our current scope
+    //Ideally this should be freed when we're done using it,
+    //but because in an ideal situation we're never done,
+    //I'll just leave it for now
+    PARSESTRUCT *pst = static_cast<PARSESTRUCT*>(malloc(sizeof(PARSESTRUCT)));
+    pst->p = p;
+    pst->TCPPort = port;
+    pthread_t *pth = static_cast<pthread_t*>(malloc(sizeof(pthread_t)));
+    listenTCPThreads.push_back(pth);
+    
+    int rc = pthread_create(pth, NULL, &startListeningTCP, pst);
     if (rc)
     {
         std::cout << "THREAD CREATION FAILED\n";
@@ -54,65 +92,81 @@ void *Client::startListeningTCP(void *v)
 {
     PARSESTRUCT *p = static_cast<PARSESTRUCT*>(v);
 
-    std::cout<<"BEGINNING OF TCP\n";
     int newsockfd;
     socklen_t clilen;
-    char buffer[BUFLEN];
     struct sockaddr_in serv_addr, cli_addr;
-    int n;
 
-    std::string port = "4444";
-
-    std::cout<<"BEGINNING OF SOCKET\n";
-    p->c->sockfd = socket(AF_INET, SOCK_STREAM, 0);
-    if (p->c->sockfd < 0) {
+    int sockfd = socket(AF_INET, SOCK_STREAM, 0);
+    if (sockfd < 0) {
         error("ERROR opening socket");
         return 0;
     }
     bzero((char *)&serv_addr, sizeof(serv_addr));
-    p->c->portno = atoi(port.c_str());
+    int portno = atoi(p->TCPPort.c_str());
     serv_addr.sin_family = AF_INET;
     serv_addr.sin_addr.s_addr = INADDR_ANY;
-    serv_addr.sin_port = htons(p->c->portno);
+    serv_addr.sin_port = htons(portno);
 
-    std::cout<<"BEGINNING OF BIND\n";
-    if (bind(p->c->sockfd, (struct sockaddr *)&serv_addr,
+    if (bind(sockfd, (struct sockaddr *)&serv_addr,
              sizeof(serv_addr)) < 0)
         error("ERROR on binding");
-    listen(p->c->sockfd, 5);
+    listen(sockfd, 5);
     clilen = sizeof(cli_addr);
 
-    std::cout<<"BEGINNING OF ACCEPT\n";
-    newsockfd = accept(p->c->sockfd,
-                       (struct sockaddr *)&cli_addr,
-                       &clilen);
-    if (newsockfd < 0)
-        error("ERROR on accept");
+    //Keep accepting new clients
+    while (true) {
+        int newsockfd = accept(sockfd,
+                        (struct sockaddr *)&cli_addr,
+                        &clilen);
+        if (newsockfd < 0) {
+            error("ERROR on accept");
+        }
 
-    std::cout<<"BEGINNING OF ACCEPTED\n";
+        //Add our client to the list
+        Client * c = new Client(newsockfd);
+        clientListTCP.push_back(c);
 
-    bzero(buffer, BUFLEN);
+        //Start listener for our new client
+        //Create a new structure that isn't bounded by our current scope
+        //Ideally this should be freed when we're done using it,
+        //but because in an ideal situation we're never done,
+        //I'll just leave it for now
+        PARSESTRUCT *pst = static_cast<PARSESTRUCT*>(malloc(sizeof(PARSESTRUCT)));
+        pst->p = p->p;
+        pst->c = c;
 
-    //Add our client to the list
-    clientListTCP.push_back(new Client(newsockfd));
+        pthread_t *pth = static_cast<pthread_t*>(malloc(sizeof(pthread_t)));
+        readTCPThreads.push_back(pth);
+        int rc = pthread_create(pth, NULL, &Client::listen_tcp_low, pst);
+        if (rc)
+        {
+            std::cout << "THREAD CREATION FAILED\n";
+        }
+    }
+    
+    return 0;
+}
 
-    //Receive from various clients
+void *Client::listen_tcp_low(void * v) {
+    PARSESTRUCT *p = static_cast<PARSESTRUCT*>(v);
+
+    //Receive from a single
     while (true)
     {
+        char buffer[BUFLEN];
+        bzero(buffer, BUFLEN);
         //Recieve
-        n = read(newsockfd, buffer, BUFLEN);
-        if (n < 0)
+        int n = read(p->c->sockfd, buffer, BUFLEN);
+        if (n <= 0)
         {
+            //TODO: Remove client from list
             error("ERROR reading from socket");
         }
 
-        p->p(*(p->c), buffer);
-
+        p->p(p->c, buffer);
         bzero(&buffer, BUFLEN);
     }
-    close(newsockfd);
     close(p->c->sockfd);
-    return 0;
 }
 
 //UDP
@@ -121,6 +175,7 @@ Client::Client(int s, struct sockaddr_in a, socklen_t length)
     sock = s;
     from = a;
     fromlen = length;
+    fillUUID();
 }
 
 void Client::sendUDP(std::string buf)
@@ -132,10 +187,18 @@ void Client::sendUDP(std::string buf)
     }
 }
 
-int Client::listenUDP(PARSER p) {
-    UDPSTRCT.p = p;
-    UDPSTRCT.c = this;
-    int rc = pthread_create(&listenUDPThreads[0], NULL, &startListeningUDP, &UDPSTRCT);
+int Client::listenUDP(PARSER p, std::string port) {
+    //Create a new structure that isn't bounded by our current scope
+    //Ideally this should be freed when we're done using it,
+    //but because in an ideal situation we're never done,
+    //I'll just leave it for now
+    PARSESTRUCT *pst = static_cast<PARSESTRUCT*>(malloc(sizeof(PARSESTRUCT)));
+    pst->p = p;
+    pst->UDPPort = port;
+    pthread_t *pth = static_cast<pthread_t*>(malloc(sizeof(pthread_t)));
+    listenUDPThreads.push_back(pth);
+    
+    int rc = pthread_create(pth, NULL, &startListeningUDP, pst);
     if (rc)
     {
         std::cout << "THREAD CREATION FAILED\n";
@@ -150,11 +213,9 @@ void *Client::startListeningUDP(void *v)
     struct sockaddr_in server;
     char buf[BUFLEN];
 
-    std::string port = "4445";
-
     //Open socket instance
-    p->c->sock = socket(AF_INET, SOCK_DGRAM, 0);
-    if (p->c->sock < 0)
+    int sock = socket(AF_INET, SOCK_DGRAM, 0);
+    if (sock < 0)
     {
         error("Opening socket");
     }
@@ -162,30 +223,48 @@ void *Client::startListeningUDP(void *v)
     bzero(&server, length);
     server.sin_family = AF_INET;
     server.sin_addr.s_addr = INADDR_ANY;
-    server.sin_port = htons(atoi(port.c_str()));
+    server.sin_port = htons(atoi(p->UDPPort.c_str()));
 
     //Bind to socket
-    if (bind(p->c->sock, (struct sockaddr *)&server, length) < 0)
+    if (bind(sock, (struct sockaddr *)&server, length) < 0)
         error("binding");
-    p->c->fromlen = sizeof(struct sockaddr_in);
+    socklen_t fromlen = sizeof(struct sockaddr_in);
 
     //Receive from various clients
     while (true)
     {
         //Recieve
-        n = recvfrom(p->c->sock, buf, BUFLEN, 0, (struct sockaddr *)&(p->c->from), &(p->c->fromlen));
-        if (n < 0)
+        struct sockaddr_in from;
+        n = recvfrom(sock, buf, BUFLEN, 0, (struct sockaddr *)&from, &fromlen);
+        if (n <= 0)
         {
+            //TODO: Remove client from list
             error("recvfrom");
         }
 
-        //Set the static client to this one
-        //c = new Client(sock, from, fromlen);
+        //Create a pointer to a client
+        Client *c = new Client(sock, from, fromlen);
+
+        //Add the udp client to the list if it's not already there
+        bool exists = false;
+        for (int i = 0; i < clientListTCP.size(); i++) {
+            if (clientListUDP.at(i)->equals(*c)) {
+                //Ah, so we exist. Delete the newly created object
+                //and replace it with the existing one.
+                exists = true;
+                delete c;
+                c = clientListUDP.at(i);
+            }
+        }
+        if (!exists) {
+            clientListUDP.push_back(c);
+        }
 
         printf("\nPARSINGUDP: %s\n", buf);
-        p->p(*(p->c), buf);
+        p->p(c, buf);
 
         bzero(&buf, BUFLEN);
+        bzero(&from, sizeof(sockaddr_in));
     }
     return 0;
 }

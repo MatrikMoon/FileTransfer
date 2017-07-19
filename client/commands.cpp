@@ -3,7 +3,7 @@
 
 int parseMessages(Server c, std::string buffer)
 {
-    printf("PARSING");
+    printf("PARSING: %s\n", buffer.c_str());
     if (strncmp(buffer.c_str(), "Server> ", 8) == 0)
     {
         buffer = &(buffer.c_str())[8];
@@ -93,7 +93,7 @@ int parseMessages(Server c, std::string buffer)
     }
     else
     {
-        printf("\n%s\n", buf);
+        printf("\nNo action: %s\n", buf);
     }
 
     return 0;

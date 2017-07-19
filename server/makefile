@@ -1,5 +1,5 @@
 all:
-	g++ -o server client.cpp server.cpp utils.cpp client.h utils.h -lpthread
+	g++ -o server client.cpp server.cpp utils.cpp client.h utils.h -lpthread -luuid
 
 clean:
 	$(RM) server

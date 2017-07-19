@@ -13,28 +13,33 @@
 #include <string.h>
 #include <sstream>
 #include <vector>
+#include <uuid/uuid.h>
 
 #define BUFLEN 1024
 
 class Client {
+    //Global
+    std::string UUID;
+
     //TCP
-    int sockfd, portno;
-    pthread_t listenTCPThreads[1];
+    int sockfd; //Initialized when tcp client is added to list
+    static std::vector<pthread_t*> listenTCPThreads;
+    static std::vector<pthread_t*> readTCPThreads;
 
     //UDP
     int sock;
     socklen_t fromlen;
     struct sockaddr_in from;
-    pthread_t listenUDPThreads[1];
+    static std::vector<pthread_t*> listenUDPThreads;
 
     //Parser setup
-    typedef int (*PARSER)(Client c, std::string s);
+    typedef int (*PARSER)(Client *c, std::string s);
     struct PARSESTRUCT {
         Client *c;
         PARSER p;
-    } STRCT, UDPSTRCT; //Probably should better handle this later.
-                        //Reassigning the pointer can cause sticky issues
-                        //for the listen loops.
+        std::string TCPPort;
+        std::string UDPPort;
+    };
     
     //Static list of all clients, just in case we need to single out one
     //for an action
@@ -44,21 +49,28 @@ class Client {
     static std::vector<Client*> clientListUDP;
 
     public:
-        //Listener
-        Client();
+        //Misc
+        void fillUUID();
+
+        //Both
+        bool equals(Client c);
+
+        //Listener/Destructor
+        ~Client();
 
         //TCP
         Client(int);
         void sendTCP(std::string);
         static void broadcastTCP(std::string);
-        int listenTCP(PARSER p);
+        static int listenTCP(PARSER p, std::string port);
         static void *startListeningTCP(void * v);
+        static void *listen_tcp_low(void * v);
 
         //UDP
         Client(int, struct sockaddr_in, socklen_t);
         void sendUDP(std::string);
         static void broadcastUDP(std::string);
-        int listenUDP(PARSER p);
+        static int listenUDP(PARSER p, std::string port);
         static void *startListeningUDP(void * v);
 };
 

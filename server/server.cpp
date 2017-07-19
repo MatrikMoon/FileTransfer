@@ -4,19 +4,18 @@
 #include "client.h"
 
 
-int parseMessages(Client c, std::string buf) {
+int parseMessages(Client *c, std::string buf) {
     printf("INSIDE PARSE: %s\n", buf.c_str());
 }
 
-int parseMessagesUDP(Client c, std::string buf) {
+int parseMessagesUDP(Client *c, std::string buf) {
     printf("INSIDE PARSE UDP: %s", buf.c_str());
 }
 
 int main(int argc, char *argv[])
 {
-    Client c;
-    c.listenTCP(&parseMessages);
-    c.listenUDP(&parseMessagesUDP);
+    Client::listenTCP(&parseMessages, "4444");
+    Client::listenUDP(&parseMessagesUDP, "4445");
     
     while (true)
     {
@@ -24,6 +23,6 @@ int main(int argc, char *argv[])
         printf("\n");
         bzero(buffer, BUFLEN);
         fgets(buffer, BUFLEN, stdin);
-        c.broadcastTCP(buffer);
+        Client::broadcastTCP(buffer);
     }
 }

@@ -32,7 +32,7 @@ class Server {
     struct PARSESTRUCT {
         Server *s;
         PARSER p;
-    } STRCT;
+    };
 
 
     public:
