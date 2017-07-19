@@ -212,6 +212,7 @@ Client::Client(int s, struct sockaddr_in a, socklen_t length)
 
 void Client::sendUDP(std::string buf)
 {
+    buf.append("<EOF>");
     int n = sendto(sock, buf.c_str(), strlen(buf.c_str()), 0, (struct sockaddr *)&from, fromlen);
     if (n < 0)
     {
@@ -278,10 +279,14 @@ void *Client::startListeningUDP(void *v)
         //Pointer to the client
         Client *c = new Client(sock, from, fromlen);
 
+        printf("Before thign:\n");
+
         //Add the udp client to the list if it's not already there
         bool exists = false;
-        for (int i = 0; i < clientListTCP.size(); i++) {
-            if (clientListUDP.at(i)->equals(*c)) {
+        for (int i = 0; i < clientListUDP.size(); i++) {
+            //Compare addresses of existing clients and the new one
+            if ((clientListUDP.at(i)->from.sin_addr.s_addr == from.sin_addr.s_addr) && 
+                (clientListUDP.at(i)->from.sin_port == from.sin_port)) {
                 //Ah, so we exist. Delete the newly created object
                 //and replace it with the existing one.
                 exists = true;

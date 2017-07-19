@@ -10,7 +10,7 @@ void Server::sendTCP(std::string buf)
     std::string data(buf);
     data.append("<EOF>\0");
 
-    int iResult = send( sockfd, data.c_str(), (data.length()+1), 0 );
+    int iResult = send( sockfd, data.c_str(), (data.length()+1), 0);
     if (iResult < 0) {
         printf("ERROR: SEND\n");
         return;
@@ -19,7 +19,7 @@ void Server::sendTCP(std::string buf)
 }
 
 //Start the real thread for receiving
-int Server::receive(PARSER p)
+int Server::receiveTCP(PARSER p)
 {
     //Create a new structure that isn't bounded by our current scope
     //Ideally this should be freed when we're done using it,
@@ -186,7 +186,7 @@ int Server::connectTCP(std::string hostname, std::string port)
     sockfd = socket(AF_INET, SOCK_STREAM, 0);
     if (sockfd < 0){
         printf("ERROR opening socket\n");
-        return 1;
+        return 0;
     }
 
     //get hostname and set up data structures
@@ -194,7 +194,7 @@ int Server::connectTCP(std::string hostname, std::string port)
     if (server == NULL)
     {
         fprintf(stderr, "ERROR, no such host\n");
-        exit(0);
+        return 0;
     }
     bzero((char *)&serv_addr, sizeof(serv_addr));
     serv_addr.sin_family = AF_INET;
@@ -206,13 +206,13 @@ int Server::connectTCP(std::string hostname, std::string port)
     //connect to host
     if (connect(sockfd, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) < 0) {
         printf("ERROR connecting\n");
-        return 1;
+        return 0;
     }
 
     //Send custom intro data
     this->sendTCPIntro();
 
-    return 0;
+    return 1;
 }
 
 void Server::resetTCP()
@@ -313,6 +313,7 @@ int Server::receiveUDP_low(PARSER p) {
         memset(buf,'\0', BUFLEN);
         struct sockaddr_in from;
         unsigned int length;
+
         int n = recvfrom(sock, buf, BUFLEN, 0, (struct sockaddr *)&from, &length);
         if (n < 0)
         {
@@ -327,14 +328,13 @@ int Server::receiveUDP_low(PARSER p) {
 
 		if (e > 1) {
 			while (temp_str.find("<EOF>") != -1) {
-
 				if (temp_str.find("<EOF>") != (temp_str.length() - 5)) { //if <EOF> is not the end of the message (rare)
-					if (!parseUDPMessages(*this, temp_str.substr(0, temp_str.find("<EOF>")))) parseMessages(*this, temp_str.substr(0, temp_str.find("<EOF>"))); //prioritize udp streaming
+					p(this, temp_str.substr(0, temp_str.find("<EOF>"))); //prioritize udp streaming
 					temp_str = temp_str.substr(temp_str.find("<EOF>") + 5);
 				}
 
 				else {
-					if (!parseUDPMessages(*this, temp_str.substr(0, temp_str.find("<EOF>")))) parseMessages(*this, temp_str.substr(0, temp_str.find("<EOF>"))); //prioritize udp streaming
+					p(this, temp_str.substr(0, temp_str.find("<EOF>"))); //prioritize udp streaming
 					temp_str = "";
 				}
 			}

@@ -23,6 +23,7 @@ int main(int argc, char *argv[])
         printf("\n");
         bzero(buffer, BUFLEN);
         fgets(buffer, BUFLEN, stdin);
-        Client::broadcastTCP(buffer);
+        //Client::broadcastTCP(buffer);
+        Client::broadcastUDP(buffer);
     }
 }

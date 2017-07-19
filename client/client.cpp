@@ -10,19 +10,25 @@ int main(int argc, char *argv[])
         exit(0);
     }
 	//Connect to server
-    if (server.connectTCP(argv[1], argv[2]) == 1) {
+    if (!server.connectTCP(argv[1], argv[2])) {
         return 1;
     }
 
 	//Create thread to receive data
-    server.receive(&parseMessages);
+    server.receiveTCP(&parseMessages);
+
+    if (!server.connectUDP(argv[1], "4445")) {
+        return 1;
+    }
+
+    server.receiveUDP(&parseUDPMessages);
 
 	//Loop for input
-    while (1) {
+    while (true) {
         char buffer[256];
         printf("\n");
         bzero(buffer, 256);
         fgets(buffer, 255, stdin);
-        server.sendTCP(buffer);
+        server.sendUDP(buffer);
     }
 }

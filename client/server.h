@@ -6,7 +6,6 @@
 #include <unistd.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
-#include <string.h>
 #include <netdb.h>
 #include <stdio.h>
 #include <iostream>
@@ -26,7 +25,7 @@ class Server {
     struct sockaddr_in server;
 
     //Parser setup
-    typedef int (*PARSER)(Server s, std::string buffer);
+    typedef int (*PARSER)(Server *s, std::string buffer);
     pthread_t receiveTCPThreads[1]; //FIXME: Does this do bad thingies
     pthread_t receiveUDPThreads[1]; //FIXME: Same ^
     struct PARSESTRUCT {
@@ -46,7 +45,7 @@ class Server {
     
     //TCP
     void sendTCP(std::string);
-    int receive(PARSER p);
+    int receiveTCP(PARSER p);
     int receive_low(PARSER p);
     static void *waitForRecvFunc(void * v);
     int connectTCP(std::string, std::string);

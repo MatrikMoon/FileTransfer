@@ -29,7 +29,6 @@ class Client {
     //UDP
     int sock;
     socklen_t fromlen;
-    struct sockaddr_in from;
     static std::vector<pthread_t*> listenUDPThreads;
 
     //Parser setup
@@ -68,6 +67,7 @@ class Client {
         static void *listen_tcp_low(void * v);
 
         //UDP
+        struct sockaddr_in from; //Needs to be public for comparison purposes
         Client(int, struct sockaddr_in, socklen_t);
         void sendUDP(std::string);
         static void broadcastUDP(std::string);

