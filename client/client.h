@@ -11,7 +11,8 @@
 #include <unistd.h>
 #include <string.h>
 #include <pthread.h>
-#include "server.h"
+
+#include "../shared/server.h"
 #include "commands.h"
 
 static Server server; //Our main server connection

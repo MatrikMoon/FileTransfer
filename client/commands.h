@@ -17,10 +17,10 @@
 #include <X11/Xlib.h>
 
 //Custom
-#include "server.h"
+#include "../shared/server.h"
 
-int parseMessages(Server *c, std::string buffer);
-int parseUDPMessages(Server *c, std::string recv);
+int parseMessages(Server *c, char * buf, int length);
+int parseUDPMessages(Server *c, char * buf, int length);
 
 int * getDesktopResolution();
 void setCursorPos(int x, int y);
@@ -28,5 +28,6 @@ void m_mouseDown();
 void m_rmouseDown();
 void m_mouseUp();
 void m_rmouseUp();
+void sendTCPIntro(Server * c);
 
 #endif

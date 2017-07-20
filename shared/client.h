@@ -15,9 +15,11 @@
 #include <vector>
 #include <uuid/uuid.h>
 
+#include "connection.h"
+
 #define BUFLEN 4096
 
-class Client {
+class Client : public Connection {
     //Global
     std::string UUID;
 

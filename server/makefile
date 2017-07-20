@@ -1,5 +1,5 @@
 all:
-	g++ -o server client.cpp server.cpp utils.cpp client.h utils.h -lpthread -luuid
+	g++ -o server server.cpp ../shared/client.cpp ../shared/client.h ../shared/utils.cpp ../shared/utils.h -lpthread -luuid
 
 clean:
 	$(RM) server

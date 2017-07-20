@@ -22,6 +22,12 @@
         "system_error": "cpp",
         "type_traits": "cpp",
         "typeinfo": "cpp",
-        "C_Cpp.intelliSenseEngine": "Default"
+        "C_Cpp.intelliSenseEngine": "Default",
+        "array": "cpp",
+        "ctime": "cpp",
+        "fstream": "cpp",
+        "iomanip": "cpp",
+        "tuple": "cpp",
+        "utility": "cpp"
     }
 }

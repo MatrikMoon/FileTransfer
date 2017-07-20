@@ -5,7 +5,7 @@ int testThing(Connection * c, std::string s) {
     c->sendTCP(s);
 }
 
-int parseFile(Server *c, char * buf, int length) {
+int parseFile(Connection *c, char * buf, int length) {
     //Ensure we don't waste processing time if it's not a file
     if (strncmp(buf, "/file", 5) != 0) {
         return 0;
@@ -34,7 +34,7 @@ int parseFile(Server *c, char * buf, int length) {
     return 0;
 }
 
-int send_file(Server *c, std::string file) {
+int send_file(Connection *c, std::string file) {
     FILESTATS f;
     std::string fh = build_file_header(file, f);
     c->sendUDP(fh);
@@ -44,7 +44,7 @@ int send_file(Server *c, std::string file) {
     }
 }
 
-int send_chunk_patch(Server *c, std::string file, std::string file_md5, int chunk_number) {
+int send_chunk_patch(Connection *c, std::string file, std::string file_md5, int chunk_number) {
     FILEPARTS f;
     char * header = build_chunk_header(file, file_md5, chunk_number, f);
     c->sendUDP(header, f.full_size);

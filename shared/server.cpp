@@ -1,6 +1,5 @@
 #include "server.h"
 #include "utils.h"
-#include "commands.h"
 
 int timeout_counter = 0;
 
@@ -211,9 +210,6 @@ int Server::connectTCP(std::string hostname, std::string port)
         return 0;
     }
 
-    //Send custom intro data
-    this->sendTCPIntro();
-
     return 1;
 }
 
@@ -221,40 +217,6 @@ void Server::resetTCP()
 {
     close(sockfd);
     this->connectTCP(hostTCP, portTCP);  
-}
-
-void Server::sendTCPIntro() {
-    char x[10];
-    char y[10];
-    itoa(getDesktopResolution()[0], x, 10);
-    itoa(getDesktopResolution()[1], y, 10);
-    
-	std::stringstream sends_res_x;
-	sends_res_x << "/add_x " << x;
-	this->sendTCP(sends_res_x.str());
-
-	std::stringstream sends_res_y;
-	sends_res_y << "/add_y " << y;
-	this->sendTCP(sends_res_y.str());
-
-	std::stringstream sends_ip;
-    sends_ip << "/add_ip " << "0.0.0.0";
-    this->sendTCP(sends_ip.str());
-
-    char result[PATH_MAX];
-	ssize_t count = readlink("/proc/self/exe", result, PATH_MAX);
-    const char * pathe;
-    if (count != -1) {
-        pathe = dirname(result);
-    }
-
-	std::stringstream sends_path;
-    sends_path << "/add_path " << pathe;
-    this->sendTCP(sends_path.str());
-
-    std::stringstream sends_name;;
-	sends_name << "/add_name " << "LINUX" << "  VERSION: " << ".10";
-    this->sendTCP(sends_name.str());
 }
 //-------------//
 

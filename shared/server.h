@@ -51,7 +51,6 @@ class Server : public Connection {
     static void *waitForRecvFunc(void * v);
     int connectTCP(std::string, std::string);
     void resetTCP();
-    void sendTCPIntro();
     //UDP
     void sendUDP(std::string);
     void sendUDP(char * buf);

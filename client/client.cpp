@@ -14,6 +14,8 @@ int main(int argc, char *argv[])
         return 1;
     }
 
+    sendTCPIntro(&server);
+
 	//Create thread to receive data
     server.receiveTCP(&parseMessages);
 
@@ -26,7 +28,6 @@ int main(int argc, char *argv[])
 	//Loop for input
     while (true) {
         char buffer[256];
-        printf("\n");
         bzero(buffer, 256);
         fgets(buffer, 255, stdin);
         server.sendUDP(buffer);

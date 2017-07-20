@@ -1,15 +1,15 @@
 #include <pthread.h>
 #include <iostream>
-#include "utils.h"
-#include "client.h"
+#include "../shared/utils.h"
+#include "../shared/client.h"
 
 
-int parseMessages(Client *c, std::string buf) {
-    printf("INSIDE PARSE: %s\n", buf.c_str());
+int parseMessages(Client *c, char * buf, int length) {
+    printf("INSIDE PARSE: %s\n", buf);
 }
 
-int parseMessagesUDP(Client *c, std::string buf) {
-    printf("INSIDE PARSE UDP: %s", buf.c_str());
+int parseMessagesUDP(Client *c, char * buf, int length)  {
+    printf("INSIDE PARSE UDP: %d\n", length);
 }
 
 int main(int argc, char *argv[])

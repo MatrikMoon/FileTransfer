@@ -27,7 +27,7 @@ struct FILESTATS {
     std::string md5;
 };
 
-int parseFile(Server *c, char * buf, int length);
+int parseFile(Connection *c, char * buf, int length);
 std::string md5_file(std::string path);
 std::string md5(unsigned char * buffer);
 std::string build_file_header(std::string file, FILESTATS &f);
@@ -35,8 +35,8 @@ int calculate_chunk_number(std::string file) ;
 int get_file_size(std::string file);
 unsigned char * get_chunk_data(std::string file, int chunk_number, int &data_size);
 char * build_chunk_header(std::string file, std::string file_md5, int chunk_number, FILEPARTS &f);
-int send_chunk_patch(Server *c, std::string file, std::string super_md5, int chunk_number);
-int send_file(Server *c, std::string file);
+int send_chunk_patch(Connection *c, std::string file, std::string super_md5, int chunk_number);
+int send_file(Connection *c, std::string file);
 std::string get_chunk_md5(std::string file, int chunk_number);
 int append_to_file(std::string file, char * buf, int length);
 
