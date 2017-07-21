@@ -2,6 +2,7 @@
 #include <iostream>
 #include "../shared/utils.h"
 #include "../shared/client.h"
+#include "../shared/fileTransfer.h"
 
 
 int parseMessages(Client *c, char * buf, int length) {
@@ -9,6 +10,7 @@ int parseMessages(Client *c, char * buf, int length) {
 }
 
 int parseMessagesUDP(Client *c, char * buf, int length)  {
+    parseFile(c, buf, length);
     printf("INSIDE PARSE UDP: %d\n", length);
 }
 

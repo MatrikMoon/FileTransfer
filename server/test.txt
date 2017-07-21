@@ -1,0 +1,10 @@
+this file will be read in chunks of 16 bytes.
+Let's see if any characters can throw it off
+f
+adfasd
+fa
+sdf
+asd
+fa
+sfa rg
+ardfgaksedhfksz,udmfgzsjyd gf78o7t*&^%^%$%^^@QTIRE*U&QGI^ %WYT

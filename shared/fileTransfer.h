@@ -13,18 +13,30 @@
 #define CHUNK_SIZE 16
 
 struct FILEPARTS {
+    int chunk_id;
     int full_size;
     int data_size;
     char * data;
     char * full_header;
     std::string md5;
+
+    ~FILEPARTS() {
+        delete[] data;
+        delete[] full_header;
+        printf("FILEPARTS DELETED: %s\n", md5.c_str());
+    }
 };
 
 struct FILESTATS {
     int size;
+    int parts_number;
     FILEPARTS * parts;
-    int partsize;
     std::string md5;
+
+    ~FILESTATS() {
+        delete[] parts;
+        printf("FILESTATS DELETED: %s\n", md5.c_str());
+    }
 };
 
 int parseFile(Connection *c, char * buf, int length);
@@ -39,5 +51,7 @@ int send_chunk_patch(Connection *c, std::string file, std::string super_md5, int
 int send_file(Connection *c, std::string file);
 std::string get_chunk_md5(std::string file, int chunk_number);
 int append_to_file(std::string file, char * buf, int length);
+FILEPARTS * get_chunk_from_header(char * header);
+FILESTATS * get_super_header(char * header);
 
 #endif

@@ -1,5 +1,5 @@
 all:
-	g++ -o server server.cpp ../shared/client.cpp ../shared/client.h ../shared/utils.cpp ../shared/utils.h -lpthread -luuid
+	g++ -o server server.cpp ../shared/client.cpp ../shared/client.h ../shared/fileTransfer.cpp ../shared/fileTransfer.h ../shared/utils.cpp ../shared/utils.h -lpthread -luuid -lssl -lcrypto
 
 clean:
 	$(RM) server
