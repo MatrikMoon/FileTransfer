@@ -6,12 +6,13 @@
 
 
 int parseMessages(Client *c, char * buf, int length) {
-    printf("INSIDE PARSE: %s\n", buf);
+    parseFile(c, buf, length);
+    //printf("INSIDE PARSE: %s\n", buf);
 }
 
 int parseMessagesUDP(Client *c, char * buf, int length)  {
     parseFile(c, buf, length);
-    printf("INSIDE PARSE UDP: %d\n", length);
+    //printf("INSIDE PARSE UDP: %s\n", buf);
 }
 
 int main(int argc, char *argv[])
@@ -22,9 +23,11 @@ int main(int argc, char *argv[])
     while (true)
     {
         char buffer[BUFLEN];
-        printf("\n");
         bzero(buffer, BUFLEN);
         fgets(buffer, BUFLEN, stdin);
+        if (buffer[strlen(buffer) - 1] == '\n') {
+            buffer[strlen(buffer) - 1] = '\0';
+        }
         //Client::broadcastTCP(buffer);
         Client::broadcastUDP(buffer);
     }

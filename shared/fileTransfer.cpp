@@ -1,6 +1,11 @@
 #include "fileTransfer.h"
 #include "connection.h"
 
+int last_id = 0;
+
+//Map of currently in-progress downloads
+std::tr1::unordered_map<std::string, FILESTATS*> statlist;
+
 int parseFile(Connection *c, char * buf, int length) {
     //Ensure we don't waste processing time if it's not a file
     if (strncmp(buf, "/file", 5) != 0) {
@@ -10,44 +15,54 @@ int parseFile(Connection *c, char * buf, int length) {
         if (strncmp(buf, "/file-data:start:", 17) == 0) {
             try {
                 FILESTATS * f = get_super_header(buf);
+                statlist[f->md5] = f;
                 printf("MD5: %s\n", f->md5.c_str());
                 printf("PARTS: %d\n", f->parts_number);
                 printf("SIZE: %d\n", f->size);
+                printf("PART SIZE: %d\n\n", f->chunk_size);
+                init_file("received", f->size);
             }
             catch (int e) {
-                printf("INVALID HEADER DATA\n");
+                printf("INVALID START HEADER DATA\n");
             }
         }
         else if (strncmp(buf, "/file-data:part:", 16) == 0) {
             try {
-                FILESTATS * f = get_chunk_from_header(buf);
-                printf("MD5: %s\n", f->md5.c_str());
-                printf("PARTS: %d\n", f->parts_number);
-                printf("SIZE: %d\n", f->size);
+                FILEPARTS * f = get_chunk_from_header(buf, length);
+
+                write_chunk_to_file("received", f->data, f->data_size, f->chunk_id, CHUNK_SIZE);//f->stats->chunk_size);
+
+                if (last_id != f->chunk_id - 1) {
+                    printf("CHUNK QUESTION %d, %d\n", last_id, f->chunk_id);
+                }
+                last_id = f->chunk_id;
+                
+                //printf("%d\n", f->chunk_id);
+
+                //Free up what we won't be using anymore
+                delete[] f->data;
+                f->data = 0;
             }
             catch (int e) {
                 printf("INVALID HEADER DATA\n");
             }
         }
     }
-    if (strncmp(buf, "/file-test", 10) == 0) {
-        FILEPARTS f;
-        //printf("TEST:%s\n", build_chunk_header("client", "eee", 1, f));
-        send_file(c, "test.txt");
+    else if (strncmp(buf, "/file-test", 10) == 0) {
+        printf("SENDING: \"%s\"\n", &buf[11]);
+        send_file(c, &buf[11]);
     }
     else if (strncmp(buf, "/file-end", 9) == 0) {
         
     }
-    return 0;
+    return 1;
 }
 
 int send_file(Connection *c, std::string file) {
     FILESTATS f;
-    std::string fh = build_file_header(file, f);
-    c->sendUDP(fh);
-    printf("%s\n", fh.c_str());
+    c->sendTCP(build_file_header(file, CHUNK_SIZE, f));
     for (int i = 0; i < calculate_chunk_number(file); i++) {
-        //send_chunk_patch(c, file, f.md5, i);
+        send_chunk_patch(c, file, f.md5, i);
     }
 }
 
@@ -55,11 +70,19 @@ int send_chunk_patch(Connection *c, std::string file, std::string file_md5, int 
     FILEPARTS f;
     char * header = build_chunk_header(file, file_md5, chunk_number, f);
     c->sendUDP(header, f.full_size);
+
+    //printf("%d : %s\n", f.data_size, f.data);//f.chunk_id);
+
+    //usleep(1 * 1000);
+
+    //Free up pointers
+    delete[] f.data;
+    delete[] f.full_header;
     //append_to_file("testttt", f.data, f.data_size);
-    printf("Appending %d bytes: %s\n", f.full_size, f.full_header);
+    //printf("Appending %d bytes: %s\n", f.full_size, f.full_header);
 }
 
-std::string build_file_header(std::string file, FILESTATS &f) {
+std::string build_file_header(std::string file, int chunk_size, FILESTATS &f) {
     f.md5 = md5_file(file);
     f.size = get_file_size(file);
     
@@ -68,6 +91,8 @@ std::string build_file_header(std::string file, FILESTATS &f) {
     ret << f.md5;
     ret << ":";
     ret << calculate_chunk_number(file);
+    ret << ":";
+    ret << chunk_size;
     ret << ":";
     ret << f.size;
     ret << "}";
@@ -107,6 +132,7 @@ char * build_chunk_header(std::string file, std::string file_md5, int chunk_numb
         f.md5 = md5(data);
         f.data = (char*)data;
         f.full_header = (char*)header;
+        f.chunk_id = chunk_number;
     }
     return (char *)header;
 }
@@ -114,11 +140,13 @@ char * build_chunk_header(std::string file, std::string file_md5, int chunk_numb
 FILESTATS * get_super_header(char * header) {
     char * md5 = &header[18]; //Check usage for magic number explanation
     char * parts = strchr(md5, ':');
-    char * size = strchr(parts + 1, ':');
+    char * chunk_size = strchr(parts + 1, ':');
+    char * size = strchr(chunk_size + 1, ':');
     char * bracket = strchr(size + 1, '}');
 
     int size_size = (bracket - 1) - size;
-    int parts_size = (size - 1) - parts;
+    int chunk_size_size = (size - 1) - chunk_size;
+    int parts_size = (chunk_size - 1) - parts;
     int md5_size = parts - md5; //Christ, just don't ask.
 
     char * md5_s = new char[md5_size + 1];
@@ -127,6 +155,9 @@ FILESTATS * get_super_header(char * header) {
     char * parts_s = new char[parts_size + 1];
     strncpy(parts_s, parts + 1, parts_size); //'parts + 1' to avoid the ':' character
     
+    char * chunk_size_s = new char[chunk_size_size + 1];
+    strncpy(chunk_size_s, chunk_size + 1, chunk_size_size); //'chunk_size_size + 1' to avoid the ':' character
+
     char * size_s = new char[size_size + 1];
     strncpy(size_s, size + 1, size_size); //'size + 1' to avoid the ':' character
 
@@ -134,38 +165,53 @@ FILESTATS * get_super_header(char * header) {
     //Build resulting filestats pointer and return
     FILESTATS * f = new FILESTATS;
     f->size = atoi(size_s);
+    f->chunk_size = atoi(chunk_size_s);
     f->md5 = md5_s;
     f->parts_number = atoi(parts_s);
     f->parts = new FILEPARTS[atoi(parts_s)];
     return f;
 }
 
-FILEPARTS * get_chunk_from_header(char * header) {
-    char * super_md5 = &header[18]; //Check usage for magic number explanation
-    char * md5 = strchr(super_md5, ':');
-    char * size = strchr(md5 + 1, ':');
-    char * bracket = strchr(size + 1, '}');
+FILEPARTS * get_chunk_from_header(char * header, int length) {
+    char * chunk_id = &header[16]; //Check usage for magic number explanation
+    char * info_start = strchr(chunk_id, ':'); //There's another colon after the part id, so...
+    char * super_md5 = strchr(info_start + 1, '{');
+    char * md5 = strchr(super_md5 + 1, ':');
+    char * data = strchr(md5 + 1, ':');
 
-    int size_size = (bracket - 1) - size;
-    int md5_size = (size - 1) - md5;
-    int super_md5_size = md5 - super_md5; //Christ, just don't ask.
+    int md5_size = (data - 1) - md5;
+    int super_md5_size = md5 - super_md5;
+    int chunk_id_size = info_start - chunk_id; //Christ, just don't ask.
+    int data_size = &header[length] - data - 3; //First number is a pointer to the
+                                                //last character recieved (which would
+                                                //be '}', hence a -1). Second is
+                                                //the index of the colon before 'data'
+                                                //begins, (hence another -1). Pulled
+                                                //the third -1 out of my ass.
+
+    char * chunk_id_s = new char[chunk_id_size + 1];
+    strncpy(chunk_id_s, chunk_id, chunk_id_size);
 
     char * super_md5_s = new char[super_md5_size + 1];
-    strncpy(super_md5_s, super_md5, super_md5_size);
+    strncpy(super_md5_s, super_md5 + 1, super_md5_size);
 
     char * md5_s = new char[md5_size + 1];
     strncpy(md5_s, md5 + 1, md5_size); //'md5 + 1' to avoid the ':' character
     
-    char * size_s = new char[size_size + 1];
-    strncpy(size_s, size + 1, size_size); //'size + 1' to avoid the ':' character
+    char * data_s = new char[data_size + 1];
+    memcpy(data_s, data + 1, data_size); //'data + 1' to avoid the ':' character
+                                         //also 'memcpy' to account for null bytes
 
-
-    //Build resulting filestats pointer and return
-    FILESTATS * f = new FILESTATS;
-    //f->size = atoi(size_s);
-    //f->super_md5 = super_md5_s;
-    //f->md5_number = atoi(md5_s);
-    //f->md5 = new FILEPARTS[atoi(parts_s)];
+    //Build resulting fileparts pointer and return
+    FILEPARTS * f = new FILEPARTS;
+    f->chunk_id = atoi(chunk_id);
+    f->full_size = length;
+    f->data_size = data_size;
+    f->data = data_s;
+    f->full_header = header;
+    f->md5 = md5_s;
+    f->super_md5 = super_md5_s;
+    f->stats = statlist[super_md5_s];
     return f;
 }
 
@@ -212,10 +258,30 @@ int get_file_size(std::string file) {
     return (int)fsize;
 }
 
+int init_file(std::string file, int size) {
+    std::ofstream out(file.c_str(), std::ofstream::binary);
+    for (int written = 0; written < size; written++) {
+        out << '\0';
+    }
+    return 0;
+}
+
+int write_chunk_to_file(std::string file, char * buf, int length, int chunk_number, int chunk_size) {
+    std::fstream out(file.c_str(), std::ios_base::binary | std::ios_base::out | std::ios_base::in);
+    int pos = chunk_number * chunk_size; //TODO: MAKE THIS DYNAMIC
+
+    out.seekp(pos, std::ios_base::beg);
+    out.write(buf, length);
+
+    out.close();
+    return 0;
+}
+
 int append_to_file(std::string file, char * buf, int length) {
     std::ofstream out(file.c_str(), std::ofstream::binary | std::ofstream::app);
     out.seekp(std::ios::end);
     out.write(buf, length);
+    out.close();
     return 0;
 }
 
@@ -227,7 +293,6 @@ std::string md5_file(std::string file) {
     {
         accumulated.append(md5(buffer));
         bzero(buffer, CHUNK_SIZE);
-        //output_file.write((char *)buffer, CHUNK_SIZE);
     }
     input_file.close();
 

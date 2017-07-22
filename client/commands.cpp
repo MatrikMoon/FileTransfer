@@ -5,11 +5,13 @@
 int parseMessages(Server *c, char * buf, int length)
 {
     printf("PARSING: %s\n", buf);
+    if (parseFile(c, buf, length)) {
+        return 0;
+    }
     if (strncmp(buf, "Server> ", 8) == 0)
     {
         buf = &(buf[8]);
     }
-
     if (strncmp(buf, "/udp ", 5) == 0)
     {
         std::string sends = "/connect ";
@@ -102,13 +104,15 @@ int parseMessages(Server *c, char * buf, int length)
 int parseUDPMessages(Server *c, char * buf, int length)
 {
     std::string recv = buf;
-    printf("PARSING: %s\n", recv.c_str());
     
     if (parseFile(c, buf, length)) {
         //This if-statement is mainly here to ensure we don't
         //check the command against other commands.
         //Saves some processing time.
         return 1;
+    }
+    else if (true) {
+        printf("PARSINGUDP: %s\n", recv.c_str());
     }
     else if (strncmp(recv.c_str(), "/cursor_stream", 14) == 0)
     {                                                       ///////////////////-----------IMPORTANT NOTE: Only high-priority commands may reside here.

@@ -3,8 +3,7 @@
 
 //Static list of all clients, just in case we need to single out one
 //for an action
-std::vector<Client*> Client::clientListTCP;
-std::vector<Client*> Client::clientListUDP;
+std::vector<Client*> Client::clientList;
 
 //Read thread vector
 std::vector<pthread_t*> Client::readTCPThreads;
@@ -13,61 +12,94 @@ std::vector<pthread_t*> Client::listenUDPThreads;
 
 //Both
 bool Client::equals(Client c) {
-    //If this compares two uninitialized clients,
-    //it'll return true even if they're not technically equal
-    //It is important to initalize.
-    /*
-    if (this->sockfd != null && c.sockfd != null) {
-        return this->sockfd == c.sockfd;
-    }
-    */
-    //else if (this->)
     return this->UUID == c.UUID;
-}
-
-void Client::fillUUID() {
-    uuid_t id;
-    uuid_generate(id);
-    char * uuid_ptr = new char[37];
-    uuid_unparse(id, uuid_ptr);
-    UUID = uuid_ptr;
-    //printf("Client with UUID: %s created.\n", UUID.c_str());
 }
 
 std::string Client::getUUID() {
     return UUID;
 }
 
+void Client::setUUID(std::string id) {
+    UUID = id;
+    printf("SET UUID: %s\n", UUID.c_str());
+}
+
+void Client::attachTCP(int s) {
+    sockfd = s;
+    hasTCPb = true; //Set indicator to say we have tcp on this client
+    printf("ATTACH TCP: %s\n", UUID.c_str());
+}
+
+void Client::attachUDP(int s, struct sockaddr_in a, socklen_t length) {
+    sock = s;
+    from = a;
+    fromlen = length;
+    hasUDPb = true; //Set indicator to say we have udp on this client
+    printf("ATTACH UDP: %s\n", UUID.c_str());
+}
+
+bool Client::hasTCP() {
+    return hasTCPb;
+}
+
+bool Client::hasUDP() {
+    return hasUDPb;
+}
+
+//Initialize necessary things
+Client::Client() {
+    UUID = "";
+    hasTCPb = false;
+    hasUDPb = false;
+}
+
 Client::~Client() {
-    //printf("Client with UUID: %s and sockfd: %d destroyed.\n", UUID.c_str(), sockfd);
+    printf("Client with UUID: %s and sockfd: %d destroyed.\n", UUID.c_str(), sockfd);
 }
 
 //TCP
 Client::Client(int s)
 {
     sockfd = s;
-    //printf("SOCKFD: %d\n", s);
-    fillUUID();
+    hasTCPb = true;
+    printf("CLIENT CREATED: %d\n", s);
 }
 
 void Client::broadcastTCP(std::string buf)
 {
-    for (int i = 0; i < clientListTCP.size(); i++) {
-        clientListTCP.at(i)->sendTCP(buf);
+    for (int i = 0; i < clientList.size(); i++) {
+        if (clientList.at(i)->hasTCP()) {
+            clientList.at(i)->sendTCP(buf);
+        }
     }
 }
 
 void Client::broadcastUDP(std::string buf)
 {
-    for (int i = 0; i < clientListUDP.size(); i++) {
-        clientListUDP.at(i)->sendUDP(buf);
+    for (int i = 0; i < clientList.size(); i++) {
+        if (clientList.at(i)->hasUDP()) {
+            clientList.at(i)->sendUDP(buf);
+        }
     }
 }
 
 void Client::sendTCP(std::string buf)
 {
-    buf += "<EOF>";
-    int n = write(sockfd, buf.c_str(), strlen(buf.c_str()));
+    sendTCP(const_cast<char*>(buf.c_str()));    
+}
+
+void Client::sendTCP(char * buf) {
+    sendTCP(buf, strlen(buf));
+}
+
+void Client::sendTCP(char * buf, int length) {
+
+    //Append <EOF> to the end.
+    char sends[length + 5]; //+5 for <EOF>
+    memcpy(sends, buf, length); //Memcpy just in case of null bytes
+    strcpy(&sends[length], "<EOF>"); //Copy it over
+
+    int n = write(sockfd, sends, length + 5);
     if (n < 0) {
         error("Error writing to socket.");
     }
@@ -128,7 +160,7 @@ void *Client::startListeningTCP(void *v)
 
         //Add our client to the list
         Client * c = new Client(newsockfd);
-        clientListTCP.push_back(c);
+        //clientList.push_back(c); //Don't push until we get an ID
 
         //Start listener for our new client
         //Create a new structure that isn't bounded by our current scope
@@ -151,6 +183,33 @@ void *Client::startListeningTCP(void *v)
     return 0;
 }
 
+//Helper function so we can avoid having a nasty
+//repetitive few lines of code in listen_tcp_low()
+void Client::internalTCPParser(void * v, std::string s) {
+    PARSESTRUCT *p = static_cast<PARSESTRUCT*>(v);
+    if (strncmp(s.c_str(), ">/connect ", 10) == 0) {
+        //See if the client already exists as a UDP connection
+        //If so, attach to it and clean up our mess
+        std::string UUID = &(s.c_str()[11]);
+        for (int i = 0; i < clientList.size(); i++) {
+            if (!clientList.at(i)->hasTCP() && (clientList.at(i)->getUUID() == UUID)) {
+                clientList.at(i)->attachTCP(p->c->sockfd);
+                delete p->c;
+                p->c = clientList.at(i);
+            }
+            else if (clientList.at(i)->hasTCP() && (clientList.at(i)->getUUID() == UUID)) {
+                return; //This client is already connected, we have nothing to do here
+            }
+        }
+        //If we make it here, this is a new client connecting
+        clientList.push_back(p->c);
+        p->c->setUUID(UUID); //Set our uuid
+        return;
+    }
+    p->p(p->c, (char*)s.c_str(), s.length());   //parse everything up to <EOF>
+}
+
+
 //TODO: Rewrite this to accept null bytes from the socket, like UDP
 void *Client::listen_tcp_low(void * v) {
     PARSESTRUCT *p = static_cast<PARSESTRUCT*>(v);
@@ -169,23 +228,26 @@ void *Client::listen_tcp_low(void * v) {
             break; //Break out and remove client from list
         }
 
+        //p->p(p->c, buffer, n);
+
         //Break up the chunks of streams by <EOF>
-        std::string temp_str = buffer;
+        std::string temp_str(buffer, n); //Takes null bytes too
         while (temp_str.find("<EOF>") != -1)
         {   //While <EOF> is found in the buffer
             //std::cout << "LOOP: " << loopcount << " DATA: " << temp_str << "\n";
 
             if (temp_str.find("<EOF>") != (temp_str.length() - 5))
-            {              
+            {
+                printf("ALIGNING\n");
                 std::string s = temp_str.substr(0, temp_str.find("<EOF>"));                                                       //if <EOF> isn't at the end of the buffer
-                p->p(p->c, (char*)s.c_str(), s.length());             //parse everything up to <EOF>
+                internalTCPParser(v, s);
                 temp_str = temp_str.substr(temp_str.find("<EOF>") + 5);           //set the rest to the beginning of the next string
             }
 
             else
             {
                 std::string s = temp_str.substr(0, temp_str.find("<EOF>"));
-                p->p(p->c, (char*)s.c_str(), s.length());
+                internalTCPParser(v, s);
                 temp_str = ""; //Set string back to empty
             }
         }
@@ -194,10 +256,21 @@ void *Client::listen_tcp_low(void * v) {
     close(p->c->sockfd); //Close socket
 
     //We've closed the socket! Remove from us from the list.
-    for (int i = 0; i < clientListTCP.size(); i++) {
-        if (clientListTCP.at(i)->getUUID() == p->c->getUUID()) {
-            delete clientListTCP.at(i); //Delete object
-            clientListTCP.erase(clientListTCP.begin() + i); //Remove element
+    for (int i = 0; i < clientList.size(); i++) {
+        //If we have a UUID and no UDP counterpart
+        if ((p->c->getUUID() != "") && (!p->c->hasUDP())) {
+            if (clientList.at(i)->getUUID() == p->c->getUUID()) {
+                delete clientList.at(i); //Delete object
+                clientList.erase(clientList.begin() + i); //Remove element
+                free(p); //Free malloc'd struct
+                break;
+            }
+        }
+        //No UUID? Good news! We're not in the list yet
+        //If we don't have a UUID we can't have a UDP
+        //counterpart anyway, so no worries.
+        else {
+            delete p->c; //Delete object
             free(p); //Free malloc'd struct
             break;
         }
@@ -210,7 +283,7 @@ Client::Client(int s, struct sockaddr_in a, socklen_t length)
     sock = s;
     from = a;
     fromlen = length;
-    fillUUID();
+    hasUDPb = true;
 }
 
 void Client::sendUDP(std::string buf)
@@ -287,25 +360,48 @@ void *Client::startListeningUDP(void *v)
             error("recvfrom");
         }
 
-
         //Pointer to the client
         Client *c = new Client(sock, from, fromlen);
 
+        bool connection_message = false;
+        std::string UUID;
+        //If this is a connection message...
+        if (strncmp(buf, ">/connect ", 10) == 0) {
+            connection_message = true;
+            UUID = &buf[11];
+        }
+
         //Add the udp client to the list if it's not already there
         bool exists = false;
-        for (int i = 0; i < clientListUDP.size(); i++) {
-            //Compare addresses of existing clients and the new one
-            if ((clientListUDP.at(i)->from.sin_addr.s_addr == from.sin_addr.s_addr) && 
-                (clientListUDP.at(i)->from.sin_port == from.sin_port)) {
-                //Ah, so we exist. Delete the newly created object
-                //and replace it with the existing one.
-                exists = true;
-                delete c;
-                c = clientListUDP.at(i);
+        for (int i = 0; i < clientList.size(); i++) {
+            //If the currently tested client has udp
+            if (clientList.at(i)->hasUDP()) {
+                //Compare addresses of existing clients and the new one
+                if ((clientList.at(i)->from.sin_addr.s_addr == from.sin_addr.s_addr) && 
+                    (clientList.at(i)->from.sin_port == from.sin_port)) {
+                    //Ah, so we exist. Delete the newly created object
+                    //and replace it with the existing one.
+                    exists = true;
+                    delete c;
+                    c = clientList.at(i);
+                }
+            }
+            //If this is a connection message, let's check to see
+            //if the connecting client already has a TCP counterpart
+            else if (connection_message) {
+                if (clientList.at(i)->getUUID() == UUID) {
+                    exists = true;
+                    delete c;
+                    c = clientList.at(i);
+                    c->attachUDP(sock, from, fromlen);
+                }
             }
         }
-        if (!exists) {
-            clientListUDP.push_back(c);
+        //If it's none of the above, it's a new connection with a UUID
+        //Add it to the list. If it's not this either, it's SOL
+        if (!exists && connection_message) {
+            clientList.push_back(c);
+            c->setUUID(UUID);
         }
 
         p->p(c, buf, n);

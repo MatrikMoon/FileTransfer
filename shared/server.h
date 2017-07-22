@@ -11,6 +11,7 @@
 #include <iostream>
 #include <string.h>
 #include <signal.h>
+#include <uuid/uuid.h>
 
 #include "connection.h"
 
@@ -36,6 +37,9 @@ class Server : public Connection {
 
 
     public:
+    Server();
+    std::string UUID;
+
     //TCP
     std::string hostTCP;
     std::string portTCP;
@@ -46,6 +50,8 @@ class Server : public Connection {
     
     //TCP
     void sendTCP(std::string);
+    void sendTCP(char * buf);
+    void sendTCP(char * buf, int length);
     int receiveTCP(PARSER p);
     int receive_low(PARSER p);
     static void *waitForRecvFunc(void * v);

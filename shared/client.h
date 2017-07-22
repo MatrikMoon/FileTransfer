@@ -23,10 +23,14 @@ class Client : public Connection {
     //Global
     std::string UUID;
 
+    //Misc
+    bool hasTCPb;
+    bool hasUDPb;
+
     //TCP
-    int sockfd; //Initialized when tcp client is added to list
     static std::vector<pthread_t*> listenTCPThreads;
     static std::vector<pthread_t*> readTCPThreads;
+    static void internalTCPParser(void*, std::string);
 
     //UDP
     int sock;
@@ -46,23 +50,32 @@ class Client : public Connection {
     //for an action
     //This only declares, does not initialize them. Will do that
     //in the implementation.
-    static std::vector<Client*> clientListTCP;
-    static std::vector<Client*> clientListUDP; //Todo: New data structure?
+    static std::vector<Client*> clientList;
+    //static std::vector<Client*> clientListUDP; //Todo: New data structure?
 
     public:
         //Misc
         std::string getUUID();
-        void fillUUID();
+        void setUUID(std::string);
+        void attachTCP(int);
+        void attachUDP(int, struct sockaddr_in, socklen_t);
+        bool hasTCP();
+        bool hasUDP();
 
         //Both
         bool equals(Client c);
 
         //Listener/Destructor
+        Client();
         ~Client();
 
         //TCP
+        int sockfd; //Initialized when tcp client is added to list
+                    //Also public for comparision purposes
         Client(int);
         void sendTCP(std::string);
+        void sendTCP(char * buf);
+        void sendTCP(char * buf, int length);
         static void broadcastTCP(std::string);
         static int listenTCP(PARSER p, std::string port);
         static void *startListeningTCP(void * v);

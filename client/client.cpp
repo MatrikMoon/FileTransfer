@@ -27,9 +27,12 @@ int main(int argc, char *argv[])
 
 	//Loop for input
     while (true) {
-        char buffer[256];
-        bzero(buffer, 256);
-        fgets(buffer, 255, stdin);
-        server.sendUDP(buffer);
+        char buffer[BUFLEN];
+        bzero(buffer, BUFLEN);
+        fgets(buffer, BUFLEN, stdin);
+        if (buffer[strlen(buffer) - 1] == '\n') {
+            buffer[strlen(buffer) - 1] = '\0';
+        }
+        server.sendTCP(buffer);
     }
 }

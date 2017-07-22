@@ -1,0 +1,1 @@
+Ensure <EOF> parsing can handle null bytes

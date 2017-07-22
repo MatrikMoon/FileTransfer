@@ -3,13 +3,36 @@
 
 int timeout_counter = 0;
 
+//----GLOBAL----//
+Server::Server() {
+    uuid_t id;
+    uuid_generate(id);
+    char * uuid_ptr = new char[37];
+    uuid_unparse(id, uuid_ptr);
+    UUID = uuid_ptr;
+}
+
+
 //-----TCP-----//
 void Server::sendTCP(std::string buf)
 {
-    std::string data(buf);
-    data.append("<EOF>\0");
+    sendTCP(const_cast<char*>(buf.c_str()));  
+}
 
-    int iResult = send( sockfd, data.c_str(), (data.length()+1), 0);
+void Server::sendTCP(char * buf) {
+    sendTCP(buf, strlen(buf));
+}
+
+void Server::sendTCP(char * buf, int length) {
+
+    //Append <EOF> to the end.
+    char sends[length + 5]; //+5 for <EOF>
+    memcpy(sends, buf, length); //Memcpy just in case of null bytes
+    strcpy(&sends[length], "<EOF>"); //Copy it over
+
+    printf("SENDING: %s\n", sends);
+
+    int iResult = send(sockfd, sends, length + 5, 0);
     if (iResult < 0) {
         printf("ERROR: SEND\n");
         return;
@@ -110,21 +133,17 @@ int Server::receive_low(PARSER p) {
         {
             int e = recv(sockfd, recvbuf, BUFLEN, 0);
             iResult2 = e;
-            std::string temp_str = "";
+            std::string temp_str(recvbuf, e); //Takes null bytes too
             //if (encryptOn) temp_str = encrypt(recvbuf);
-            temp_str = recvbuf; //else
-
+            //temp_str = recvbuf; //else
             //std::cout << "TEMPSTR: " << temp_str << "\n";
 
             if (e > 1)
             {
-                int loopcount = 1;
-                while (temp_str.find("<EOF>") != -1)
-                {   //While <EOF> is found in the buffer
-                    //std::cout << "LOOP: " << loopcount << " DATA: " << temp_str << "\n";
-
+                while (temp_str.find("<EOF>") != -1) {   //While <EOF> is found in the buffer
                     if (temp_str.find("<EOF>") != (temp_str.length() - 5))
-                    {           
+                    {
+                        printf("ALIGNING\n");
                         std::string s = temp_str.substr(0, temp_str.find("<EOF>"));                                                          //if <EOF> isn't at the end of the buffer
                         p(this, (char*)s.c_str(), s.length());             //parse everything up to <EOF>
                         temp_str = temp_str.substr(temp_str.find("<EOF>") + 5);           //set the rest to the beginning of the next string
@@ -137,8 +156,6 @@ int Server::receive_low(PARSER p) {
                         temp_str = "";
                         cont = false; //Maybe not necessary?
                     }
-
-                    loopcount++;
                 }
             }
             else if (e == 0) {
@@ -209,6 +226,9 @@ int Server::connectTCP(std::string hostname, std::string port)
         printf("ERROR connecting\n");
         return 0;
     }
+
+    //Send connection info, client id
+    sendTCP(">/connect " + UUID);
 
     return 1;
 }
@@ -366,6 +386,8 @@ int Server::connectUDP(std::string hostname, std::string port)
     server.sin_port = htons(atoi(port.c_str()));
     length = sizeof(struct sockaddr_in);
     slength = length;
+
+    sendUDP(const_cast<char*>((">/connect " + UUID).c_str())); //FIXME: Ugly hack to let the server know we connected
 
     return 1;
 }
