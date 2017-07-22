@@ -196,6 +196,7 @@ void Client::internalTCPParser(void * v, std::string s) {
                 clientList.at(i)->attachTCP(p->c->sockfd);
                 delete p->c;
                 p->c = clientList.at(i);
+                return;
             }
             else if (clientList.at(i)->hasTCP() && (clientList.at(i)->getUUID() == UUID)) {
                 return; //This client is already connected, we have nothing to do here

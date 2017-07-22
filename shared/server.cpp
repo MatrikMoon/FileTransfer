@@ -30,7 +30,7 @@ void Server::sendTCP(char * buf, int length) {
     memcpy(sends, buf, length); //Memcpy just in case of null bytes
     strcpy(&sends[length], "<EOF>"); //Copy it over
 
-    printf("SENDING: %s\n", sends);
+    //printf("SENDING: %s\n", sends);
 
     int iResult = send(sockfd, sends, length + 5, 0);
     if (iResult < 0) {
