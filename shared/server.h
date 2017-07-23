@@ -20,11 +20,13 @@
 class Server : public Connection {
     //TCP
     int sockfd;
+    bool hasTCPb;
 
     //UDP
     int sock, port;
     unsigned int slength;
     struct sockaddr_in server;
+    bool hasUDPb;
 
     //Parser setup
     typedef int (*PARSER)(Server *s, char * buf, int length);
@@ -57,6 +59,7 @@ class Server : public Connection {
     static void *waitForRecvFunc(void * v);
     int connectTCP(std::string, std::string);
     void resetTCP();
+    bool hasTCP();
     //UDP
     void sendUDP(std::string);
     void sendUDP(char * buf);
@@ -65,6 +68,7 @@ class Server : public Connection {
     int receiveUDP_low(PARSER p);
     static void *waitForUDPFunc(void * v);
     int connectUDP(std::string, std::string);
+    bool hasUDP();
 };
 
 #endif

@@ -1,1 +1,5 @@
 Ensure <EOF> parsing can handle null bytes
+
+Figure out how to tell if a file operation failed and why
+
+Ensure TCP and UDP are connected before sending file

@@ -26,6 +26,8 @@ class Client : public Connection {
     //Misc
     bool hasTCPb;
     bool hasUDPb;
+    void setHasTCP(bool);
+    void setHasUDP(bool);
 
     //TCP
     static std::vector<pthread_t*> listenTCPThreads;
@@ -66,7 +68,6 @@ class Client : public Connection {
         bool equals(Client c);
 
         //Listener/Destructor
-        Client();
         ~Client();
 
         //TCP

@@ -45,7 +45,7 @@ struct FILESTATS {
 
     ~FILESTATS() {
         //delete[] parts;
-        //printf("FILESTATS DELETED: %s\n", md5.c_str());
+        printf("FILESTATS DELETED: %s\n", md5.c_str());
     }
 };
 
@@ -65,5 +65,7 @@ FILEPARTS * get_chunk_from_header(char * header, int length);
 FILESTATS * get_super_header(char * header);
 int init_file(std::string file, int size);
 int write_chunk_to_file(std::string file, char * buf, int length, int chunk_number, int chunk_size);
-
+void end_file_transmission(char*);
+void send_end_file(Connection * c, std::string md5);
+bool check_connection(Connection * c);
 #endif

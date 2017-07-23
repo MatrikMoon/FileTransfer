@@ -41,3 +41,8 @@ char* itoa(int value, char* result, int base) {
 	}
 	return result;
 }
+
+bool file_exists(const std::string& name) {
+	struct stat buffer;   
+	return (stat (name.c_str(), &buffer) == 0); 
+}

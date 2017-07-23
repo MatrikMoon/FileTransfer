@@ -12,6 +12,13 @@ Server::Server() {
     UUID = uuid_ptr;
 }
 
+bool Server::hasTCP() {
+    return hasTCPb;
+}
+
+bool Server::hasUDP() {
+    return hasUDPb;
+}
 
 //-----TCP-----//
 void Server::sendTCP(std::string buf)
@@ -229,6 +236,7 @@ int Server::connectTCP(std::string hostname, std::string port)
 
     //Send connection info, client id
     sendTCP(">/connect " + UUID);
+    hasTCPb = true;
 
     return 1;
 }
@@ -320,7 +328,14 @@ int Server::receiveUDP_low(PARSER p) {
             return -1;
         }
 
-        p(this, buf, n);
+        //If we make it this far, we have a connection
+        if (strncmp(buf, ">/ack", 5) == 0) {
+            hasUDPb = true;
+        }
+        //No need to parse an ack
+        else {
+            p(this, buf, n);
+        }
 
         /*
 		temp_str += buf;

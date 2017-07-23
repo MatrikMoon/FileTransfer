@@ -14,6 +14,8 @@ class Connection {
         virtual void sendUDP(std::string) = 0;
         virtual void sendUDP(char * buf) = 0;
         virtual void sendUDP(char * buf, int length) = 0;
+        virtual bool hasTCP() = 0;
+        virtual bool hasUDP() = 0;
 };
 
 #endif

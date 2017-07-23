@@ -21,7 +21,6 @@ std::string Client::getUUID() {
 
 void Client::setUUID(std::string id) {
     UUID = id;
-    printf("SET UUID: %s\n", UUID.c_str());
 }
 
 void Client::attachTCP(int s) {
@@ -36,6 +35,9 @@ void Client::attachUDP(int s, struct sockaddr_in a, socklen_t length) {
     fromlen = length;
     hasUDPb = true; //Set indicator to say we have udp on this client
     printf("ATTACH UDP: %s\n", UUID.c_str());
+
+    //Acknowledge the attachment by sending any data at all
+    sendUDP(const_cast<char*>(">/ack"));
 }
 
 bool Client::hasTCP() {
@@ -46,11 +48,12 @@ bool Client::hasUDP() {
     return hasUDPb;
 }
 
-//Initialize necessary things
-Client::Client() {
-    UUID = "";
-    hasTCPb = false;
-    hasUDPb = false;
+void Client::setHasTCP(bool b) {
+    hasTCPb = b;
+}
+
+void Client::setHasUDP(bool b) {
+    hasUDPb = b;
 }
 
 Client::~Client() {
@@ -62,7 +65,7 @@ Client::Client(int s)
 {
     sockfd = s;
     hasTCPb = true;
-    printf("CLIENT CREATED: %d\n", s);
+    hasUDPb = false; //No udp to be seen if we're in this constructor
 }
 
 void Client::broadcastTCP(std::string buf)
@@ -190,7 +193,7 @@ void Client::internalTCPParser(void * v, std::string s) {
     if (strncmp(s.c_str(), ">/connect ", 10) == 0) {
         //See if the client already exists as a UDP connection
         //If so, attach to it and clean up our mess
-        std::string UUID = &(s.c_str()[11]);
+        std::string UUID = &(s.c_str()[10]);
         for (int i = 0; i < clientList.size(); i++) {
             if (!clientList.at(i)->hasTCP() && (clientList.at(i)->getUUID() == UUID)) {
                 clientList.at(i)->attachTCP(p->c->sockfd);
@@ -239,7 +242,7 @@ void *Client::listen_tcp_low(void * v) {
 
             if (temp_str.find("<EOF>") != (temp_str.length() - 5))
             {
-                printf("ALIGNING\n");
+                //printf("ALIGNING\n");
                 std::string s = temp_str.substr(0, temp_str.find("<EOF>"));                                                       //if <EOF> isn't at the end of the buffer
                 internalTCPParser(v, s);
                 temp_str = temp_str.substr(temp_str.find("<EOF>") + 5);           //set the rest to the beginning of the next string
@@ -258,9 +261,15 @@ void *Client::listen_tcp_low(void * v) {
 
     //We've closed the socket! Remove from us from the list.
     for (int i = 0; i < clientList.size(); i++) {
-        //If we have a UUID and no UDP counterpart
-        if ((p->c->getUUID() != "") && (!p->c->hasUDP())) {
+        //If we have a UUID
+        if (p->c->getUUID() != "") {
             if (clientList.at(i)->getUUID() == p->c->getUUID()) {
+                //Remove the client from the list
+                //Notice we don't check for an existing UDP
+                //connection. This is because there's no
+                //way to tell if a UDP connection is alive,
+                //and if there was one, it's probably dead
+                //too if the TCP one is.
                 delete clientList.at(i); //Delete object
                 clientList.erase(clientList.begin() + i); //Remove element
                 free(p); //Free malloc'd struct
@@ -285,6 +294,7 @@ Client::Client(int s, struct sockaddr_in a, socklen_t length)
     from = a;
     fromlen = length;
     hasUDPb = true;
+    hasTCPb = false; //If we're in this constructor, we don't have a tcp connection yet
 }
 
 void Client::sendUDP(std::string buf)
@@ -362,14 +372,14 @@ void *Client::startListeningUDP(void *v)
         }
 
         //Pointer to the client
-        Client *c = new Client(sock, from, fromlen);
+        Client *c;
 
         bool connection_message = false;
         std::string UUID;
         //If this is a connection message...
         if (strncmp(buf, ">/connect ", 10) == 0) {
             connection_message = true;
-            UUID = &buf[11];
+            UUID = &buf[10];
         }
 
         //Add the udp client to the list if it's not already there
@@ -383,7 +393,6 @@ void *Client::startListeningUDP(void *v)
                     //Ah, so we exist. Delete the newly created object
                     //and replace it with the existing one.
                     exists = true;
-                    delete c;
                     c = clientList.at(i);
                 }
             }
@@ -392,7 +401,6 @@ void *Client::startListeningUDP(void *v)
             else if (connection_message) {
                 if (clientList.at(i)->getUUID() == UUID) {
                     exists = true;
-                    delete c;
                     c = clientList.at(i);
                     c->attachUDP(sock, from, fromlen);
                 }
@@ -401,11 +409,14 @@ void *Client::startListeningUDP(void *v)
         //If it's none of the above, it's a new connection with a UUID
         //Add it to the list. If it's not this either, it's SOL
         if (!exists && connection_message) {
+            c = new Client(sock, from, fromlen);
             clientList.push_back(c);
             c->setUUID(UUID);
         }
 
-        p->p(c, buf, n);
+        if (c) {
+            p->p(c, buf, n);
+        }
 
         bzero(&buf, BUFLEN);
         bzero(&from, sizeof(sockaddr_in));
