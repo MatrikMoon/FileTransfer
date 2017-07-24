@@ -18,13 +18,14 @@ int parseFile(Connection *c, char * buf, int length) {
             try {
                 FILESTATS * f = get_super_header(buf);
                 statlist[f->md5] = f;
-                //printf("In_MD5: \"%s\"\n", f->md5.c_str());
-                //printf("Pointer: \"%d\"\n", statlist[f->md5]);
+                //f->parts = new FILEPARTS[f->parts_number];
                 printf("MD5: %s\n", f->md5.c_str());
                 printf("PARTS: %d\n", f->parts_number);
                 printf("SIZE: %d\n", f->size);
                 printf("PART SIZE: %d\n\n", f->chunk_size);
-                //init_file("received", f->size);
+                if (file_exists("received")) {
+                    remove("received");
+                }
             }
             catch (int e) {
                 printf("INVALID START HEADER DATA\n");
@@ -33,13 +34,12 @@ int parseFile(Connection *c, char * buf, int length) {
         else if (strncmp(buf, "/file-data:part:", 16) == 0) {
             try {
                 FILEPARTS * f = get_chunk_from_header(buf, length);
-                
-                //Init file if necessary. NEED TO DO THIS IN UDP
-                //OR YOU'LL LOSE A CHUNK TO A FSTREAM WRITE ERROR.
-                //^Threading is a bitch
-                if (!file_exists("received")) {
-                    init_file("received", statlist[f->super_md5]->size);
+
+                /*
+                if (f->chunk_id % 2 == 0) {
+                    write_chunk_to_file("received", f->data, f->data_size, f->chunk_id, CHUNK_SIZE);//f->stats->chunk_size);
                 }
+                */
 
                 write_chunk_to_file("received", f->data, f->data_size, f->chunk_id, CHUNK_SIZE);//f->stats->chunk_size);
 
@@ -47,8 +47,6 @@ int parseFile(Connection *c, char * buf, int length) {
                     printf("CHUNK QUESTION %d, %d\n", last_id, f->chunk_id);
                 }
                 last_id = f->chunk_id;
-
-                //printf("%d\n", f->data_size);
 
                 //Free up what we won't be using anymore
                 delete[] f->data;
@@ -72,8 +70,13 @@ int parseFile(Connection *c, char * buf, int length) {
 //High-level function to send a file.
 //First sends the file info through tcp, then
 //data through udp. If the Connection is missing
-//a tcp or udp connection, returns 1 or 2 respectively
+//a tcp or udp connection, returns 1
 int send_file(Connection *c, std::string file) {
+    if (!check_connection(c)) {
+        printf("Client not connected with both TCP and UDP\n");
+        return 1;
+    }
+
     FILESTATS f;
     c->sendTCP(build_file_header(file, CHUNK_SIZE, f));
     for (int i = 0; i < calculate_chunk_number(file); i++) {
@@ -100,8 +103,51 @@ void end_file_transmission(char * buf) {
     char md5_s[33];
     bzero(md5_s, 33);
     strncpy(md5_s, md5, md5_size);
+    
+    printf("TRUE MD5: %s\n", md5_s);
 
-    printf("END MD5: %d: %s\n", md5_size, md5_s);
+    std::string current_md5 = md5_file("received");
+
+    printf("OUR MD5: \"%s\"\n", current_md5.c_str());
+
+    if (current_md5 == md5_s) {
+        printf("FILE VERIFIED.\n");
+
+        //verify_chunks("received", md5_s);
+
+        //Since we're verified, we don't need all those
+        //nasty structures anymore
+        //free(statlist[md5_s]->parts);
+    }
+    else {
+        printf("FILE HAS MD5: %s\n", current_md5.c_str());
+
+        verify_chunks("received", md5_s);
+    }
+}
+
+//Verify each individual piece of a file and return a list
+//of invalid chunks
+std::vector<int> verify_chunks(std::string file, std::string super_md5) {
+    std::vector<int> missing;
+    unsigned char buffer[CHUNK_SIZE];
+    std::ifstream input_file(file.c_str(), std::ifstream::binary);
+
+    int i = 0;
+    while (input_file.read((char *)buffer, CHUNK_SIZE))
+    {
+        //printf("\"%s\" : \"%s\"", statlist[super_md5]->parts.at(i)->md5.c_str(), md5(buffer, input_file.gcount()).c_str());
+        if (md5(buffer, input_file.gcount()) != statlist[super_md5]->parts.at(i)->md5) {
+            //printf(" <-- !");
+            missing.push_back(i);
+        }
+        //printf("\n");
+        i++;
+        bzero(buffer, CHUNK_SIZE);
+    }
+    input_file.close();
+
+    return missing;
 }
 
 //Sends a simple end file transmission
@@ -119,15 +165,9 @@ int send_chunk_patch(Connection *c, std::string file, std::string file_md5, int 
     char * header = build_chunk_header(file, file_md5, chunk_number, f);
     c->sendUDP(header, f.full_size);
 
-    //printf("%d : %s\n", f.data_size, f.data);//f.chunk_id);
-
-    //usleep(1 * 1000);
-
-    //Free up pointers
+    //Free up pointers we won't need
     delete[] f.data;
     delete[] f.full_header;
-    //append_to_file("testttt", f.data, f.data_size);
-    //printf("Appending %d bytes: %s\n", f.full_size, f.full_header);
 }
 
 //Takes a file name, desired chunk size, and FILESTATS structure
@@ -165,7 +205,7 @@ char * build_chunk_header(std::string file, std::string file_md5, int chunk_numb
     ret << ":{";
     ret << file_md5;
     ret << ":";
-    ret << md5(data);
+    ret << md5(data, data_size);
     ret << ":";
 
     int size = data_size + strlen(ret.str().c_str()) + 2; //"2" is for the "}\0" that we'll be appending
@@ -184,7 +224,7 @@ char * build_chunk_header(std::string file, std::string file_md5, int chunk_numb
     if (&f != 0) {
         f.full_size = size;
         f.data_size = data_size;
-        f.md5 = md5(data);
+        f.md5 = md5(data, data_size);
         f.data = (char*)data;
         f.full_header = (char*)header;
         f.chunk_id = chunk_number;
@@ -206,17 +246,19 @@ FILESTATS * get_super_header(char * header) {
     int md5_size = parts - md5; //Christ, just don't ask.
 
     char * md5_s = new char[md5_size + 1];
-    bzero(md5_s, md5_size + 1);
-    //md5_s[md5_size + 1] = '\0'; //Null terminate the string, FIXME: Do I have to do this everywhere?
+    md5_s[md5_size] = '\0'; //Null terminate the string
     strncpy(md5_s, md5, md5_size);
 
     char * parts_s = new char[parts_size + 1];
+    parts_s[parts_size] = '\0';
     strncpy(parts_s, parts + 1, parts_size); //'parts + 1' to avoid the ':' character
     
     char * chunk_size_s = new char[chunk_size_size + 1];
+    chunk_size_s[chunk_size_size] = '\0';
     strncpy(chunk_size_s, chunk_size + 1, chunk_size_size); //'chunk_size_size + 1' to avoid the ':' character
 
     char * size_s = new char[size_size + 1];
+    size_s[size_size] = '\0';
     strncpy(size_s, size + 1, size_size); //'size + 1' to avoid the ':' character
 
 
@@ -226,7 +268,6 @@ FILESTATS * get_super_header(char * header) {
     f->chunk_size = atoi(chunk_size_s);
     f->md5 = std::string(md5_s); //Ensure we only get what we need
     f->parts_number = atoi(parts_s);
-    //f->parts = new FILEPARTS[atoi(parts_s)];
     return f;
 }
 
@@ -249,20 +290,23 @@ FILEPARTS * get_chunk_from_header(char * header, int length) {
                                                     //the third -1 out of my ass.
 
     char * chunk_id_s = new char[chunk_id_size + 1];
+    chunk_id_s[chunk_id_size] = '\0';
     strncpy(chunk_id_s, chunk_id, chunk_id_size);
 
     char * super_md5_s = new char[super_md5_size + 1];
+    super_md5_s[super_md5_size] = '\0';
     strncpy(super_md5_s, super_md5 + 1, super_md5_size);
 
     char * md5_s = new char[md5_size + 1];
+    md5_s[md5_size] = '\0';
     strncpy(md5_s, md5 + 1, md5_size); //'md5 + 1' to avoid the ':' character
     
-    char * data_s = new char[data_size + 1];
+    char * data_s = new char[data_size + 1]; //No need for null termination
     memcpy(data_s, data + 1, data_size); //'data + 1' to avoid the ':' character
                                          //also 'memcpy' to account for null bytes
-
+                                         
     //Build resulting fileparts pointer and return
-    FILEPARTS * f = new FILEPARTS;
+    FILEPARTS * f = new FILEPARTS;//new FILEPARTS;
     f->chunk_id = atoi(chunk_id);
     f->full_size = length;
     f->data_size = data_size;
@@ -271,6 +315,14 @@ FILEPARTS * get_chunk_from_header(char * header, int length) {
     f->md5 = md5_s;
     f->super_md5 = super_md5_s;
     f->stats = statlist[super_md5_s];
+
+    if (!statlist[f->super_md5]) {
+        printf("Uh-oh. Looks like we're segfaulting.\n");
+        printf("BMD5: \"%s\"\n", f->super_md5.c_str());
+        printf("BPOINTER: %d\n", statlist[f->super_md5]);
+    }
+
+    statlist[f->super_md5]->parts.push_back(f);// = f; //Set the proper index in the super array to equal us
     return f;
 }
 
@@ -295,11 +347,6 @@ unsigned char * get_chunk_data(std::string file, int chunk_number, int &data_siz
     return buffer;
 }
 
-std::string get_chunk_md5(std::string file, int chunk_number) {
-    int data_size = 0;
-    return md5((unsigned char*)get_chunk_data(file, chunk_number, data_size));
-}
-
 int calculate_chunk_number(std::string file) {
     int file_size = get_file_size(file);
     int chunk_number = file_size / CHUNK_SIZE;
@@ -319,36 +366,21 @@ int get_file_size(std::string file) {
     return (int)fsize;
 }
 
-int init_file(std::string file, int size) {
-    std::ofstream out(file.c_str(), std::ofstream::binary);
-    for (int written = 0; written < size; written++) {
-        out << '\0';
-    }
+//Create file
+void init_file(std::string file) {
+    std::ofstream out(file.c_str(), std::ios_base::binary);
     out.close();
-    return 0;
 }
 
 int write_chunk_to_file(std::string file, char * buf, int length, int chunk_number, int chunk_size) {
-    int write_tries_max = 5; //Bail if we can't write five times
-    std::fstream out;
+    //Create file if it doesn't exist
+    if (!file_exists("received")) init_file("received");
 
-    //Do throw exceptions, we can't have writes failing here.
-    std::ios_base::iostate exceptionMask = out.exceptions() | std::ios::failbit | std::ios::badbit;
-    out.exceptions(exceptionMask);
+    std::fstream out(file.c_str(), std::ios_base::binary | std::ios_base::out | std::ios_base::in);
     int pos = chunk_number * chunk_size;
-    try {
-        out.open(file.c_str(), std::ios_base::binary | std::ios_base::out | std::ios_base::in);
-        out.seekp(pos, std::ios_base::beg);
-        out.write(buf, length);
-        if (out.fail()) {
-            printf("Out failed.\n");
-        }
-    }
-    catch (std::ios_base::failure& e) {
-        std::cerr << e.what() << '\n';
-    }
 
-    //printf("SEEK: %d\nWRITE: %s\nLENGTH: %d\n", pos, buf, length);
+    out.seekp(pos, std::ios_base::beg);
+    out.write(buf, length);
 
     out.close();
     return 0;
@@ -368,18 +400,20 @@ std::string md5_file(std::string file) {
     std::ifstream input_file(file.c_str(), std::ifstream::binary);
     while (input_file.read((char *)buffer, CHUNK_SIZE))
     {
-        accumulated.append(md5(buffer));
+        accumulated.append(md5(buffer, input_file.gcount()));
         bzero(buffer, CHUNK_SIZE);
     }
     input_file.close();
 
-    return md5((unsigned char*)accumulated.c_str());
+    //printf("ACC: %s\n", accumulated.c_str());
+
+    return md5((unsigned char*)accumulated.c_str(), accumulated.length());
 }
 
-std::string md5(unsigned char * buffer) {
+std::string md5(unsigned char * buffer, int length) {
     unsigned char result[MD5_DIGEST_LENGTH];
 
-    MD5(buffer, sizeof(buffer), result);
+    MD5(buffer, length, result);
 
     std::ostringstream sout;
     sout<<std::hex<<std::setfill('0');

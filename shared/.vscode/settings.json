@@ -28,6 +28,10 @@
         "tuple": "cpp",
         "type_traits": "cpp",
         "typeinfo": "cpp",
-        "cmath": "cpp"
+        "cmath": "cpp",
+        "mutex": "cpp",
+        "chrono": "cpp",
+        "functional": "cpp",
+        "ratio": "cpp"
     }
 }
