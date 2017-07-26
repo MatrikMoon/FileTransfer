@@ -7,7 +7,7 @@
 
 int parseMessages(Client *c, char * buf, int length) {
     parseFile(c, buf, length);
-    //printf("INSIDE PARSE: %s\n", buf);
+    printf("INSIDE PARSE: %s\n", buf);
 }
 
 int parseMessagesUDP(Client *c, char * buf, int length)  {
@@ -28,7 +28,7 @@ int main(int argc, char *argv[])
         if (buffer[strlen(buffer) - 1] == '\n') {
             buffer[strlen(buffer) - 1] = '\0';
         }
-        //Client::broadcastTCP(buffer);
-        Client::broadcastUDP(buffer);
+        Client::broadcastTCP(buffer);
+        //Client::broadcastUDP(buffer);
     }
 }

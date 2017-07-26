@@ -6,7 +6,7 @@ int last_id = 0;
 bool done = false;
 
 //Map of currently in-progress downloads
-std::tr1::unordered_map<std::string, FILESTATS*> statlist;
+std::unordered_map<std::string, FILESTATS*> statlist;
 
 int parseFile(Connection *c, char * buf, int length) {
     //Ensure we don't waste processing time if it's not a file
@@ -18,8 +18,7 @@ int parseFile(Connection *c, char * buf, int length) {
             try {
                 FILESTATS * f = get_super_header(buf);
                 statlist[f->md5] = f;
-                //f->parts = new FILEPARTS[f->parts_number];
-                printf("MD5: %s\n", f->md5.c_str());
+                printf("MD5: \"%s\"\n", f->md5.c_str());
                 printf("PARTS: %d\n", f->parts_number);
                 printf("SIZE: %d\n", f->size);
                 printf("PART SIZE: %d\n\n", f->chunk_size);
@@ -35,16 +34,34 @@ int parseFile(Connection *c, char * buf, int length) {
             try {
                 FILEPARTS * f = get_chunk_from_header(buf, length);
 
+                //Flub some chunks
                 /*
-                if (f->chunk_id % 2 == 0) {
-                    write_chunk_to_file("received", f->data, f->data_size, f->chunk_id, CHUNK_SIZE);//f->stats->chunk_size);
+                int maybe = rand() % 3;
+                //printf("%d %d\n", time(0), maybe);
+                if (maybe != 0) {
+                    write_chunk_to_file("received", f->data, f->data_size, f->chunk_id, f->stats->chunk_size);
                 }
                 */
 
-                write_chunk_to_file("received", f->data, f->data_size, f->chunk_id, CHUNK_SIZE);//f->stats->chunk_size);
+                /*
+                if ((f->chunk_id != 2) && (f->chunk_id != 3) && (f->chunk_id != 4) && (f->chunk_id != 6) && (f->chunk_id != 9)) {
+                    write_chunk_to_file("received", f->data, f->data_size, f->chunk_id, CHUNK_SIZE);//f->stats->chunk_size);
+                }
+                */
+                
+                /*
+                if (f->chunk_id != 3 || done) {
+                    write_chunk_to_file("received", f->data, f->data_size, f->chunk_id, CHUNK_SIZE);//f->stats->chunk_size);
+                }
+                else {
+                    done = true;
+                    printf("Skipping: %d\n", f->chunk_id);
+                }
+                */
+                write_chunk_to_file("received", f->data, f->data_size, f->chunk_id, f->stats->chunk_size);
 
                 if (last_id != f->chunk_id - 1) {
-                    printf("CHUNK QUESTION %d, %d\n", last_id, f->chunk_id);
+                    //printf("CHUNK QUESTION %d, %d\n", last_id, f->chunk_id);
                 }
                 last_id = f->chunk_id;
 
@@ -56,8 +73,11 @@ int parseFile(Connection *c, char * buf, int length) {
                 printf("INVALID HEADER DATA\n");
             }
         }
+        else if (strncmp(buf, "/file-data:request:", 19) == 0) {
+            parse_chunk_patch_request(c, buf);
+        }
         else if (strncmp(buf, "/file-data:end:", 15) == 0) {
-            end_file_transmission(buf);
+            end_file_transmission(c, buf);
         }
     }
     else if (strncmp(buf, "/file-test", 10) == 0) {
@@ -77,12 +97,14 @@ int send_file(Connection *c, std::string file) {
         return 1;
     }
 
-    FILESTATS f;
-    c->sendTCP(build_file_header(file, CHUNK_SIZE, f));
+    FILESTATS * f = new FILESTATS;
+    c->sendTCP(build_file_header(file, CHUNK_SIZE, *f));
+    statlist[f->md5] = f; //Store the currently sending file
+    f->file = file;
     for (int i = 0; i < calculate_chunk_number(file); i++) {
-        send_chunk_patch(c, file, f.md5, i);
+        send_chunk_patch(c, file, f->md5, i);
     }
-    send_end_file(c, f.md5);
+    send_end_file(c, f->md5);
 }
 
 //This function takes a buf value and
@@ -94,27 +116,21 @@ int send_file(Connection *c, std::string file) {
 //a list of chinks to retransmit and do the
 //send it. This function will be called again after
 //the retransmission.
-void end_file_transmission(char * buf) {
+void end_file_transmission(Connection * c, char * buf) {
     char * md5 = &buf[16];
     char * bracket = strchr(md5 + 1, '}');
-
     int md5_size = bracket - md5;
 
     char md5_s[33];
     bzero(md5_s, 33);
     strncpy(md5_s, md5, md5_size);
     
-    printf("TRUE MD5: %s\n", md5_s);
+    //printf("TRUE MD5: %s\n", md5_s);
 
     std::string current_md5 = md5_file("received");
-
-    printf("OUR MD5: \"%s\"\n", current_md5.c_str());
-
     if (current_md5 == md5_s) {
         printf("FILE VERIFIED.\n");
-
-        //verify_chunks("received", md5_s);
-
+        
         //Since we're verified, we don't need all those
         //nasty structures anymore
         //free(statlist[md5_s]->parts);
@@ -122,8 +138,159 @@ void end_file_transmission(char * buf) {
     else {
         printf("FILE HAS MD5: %s\n", current_md5.c_str());
 
-        verify_chunks("received", md5_s);
+        //Send each patch request we generate
+        for (std::string s : build_patch_requests(verify_chunks("received", md5_s), statlist[md5_s]->chunk_size, md5_s)) {
+            //printf("REQ: %s\n", s.c_str());
+            c->sendTCP(s);
+        }
     }
+}
+
+//Parse a patch request and send the patches
+void parse_chunk_patch_request(Connection * c, char * buf) {
+    char * md5 = &buf[19];
+    char * end_colon = strchr(md5, ':');
+    char * start = strchr(md5, '{');
+    start++; //Skip the nasty bracket
+    char * bracket = strchr(start + 1, '}');
+
+    //If there's another colon in here, there's an end tag
+    bool end = false;
+    if (end_colon != 0) end = true;
+
+    char md5_s[start - md5];
+    md5_s[start - md5 - 1] = '\0';
+    strncpy(md5_s, md5, start - md5 - 1);
+
+    //printf("MD5: %s\n", md5_s);
+    //printf("START %s\n", start);
+    
+    char * current_numbers = start;
+    char * comma = strchr(start, ',');
+    //There won't be commmas if there's only one chunk to patch
+    if (comma == 0) {
+        comma = bracket;
+    }
+    //printf("BCL %s\n", buf);
+    while (comma != 0) {
+        //printf("LOOP %s\n", current_numbers);
+        //Memchr so we can control the number of characters to search
+        //If this is a range entry
+        char * dash = (char*)memchr(current_numbers, '-', comma - current_numbers);
+        if (dash != 0) {
+            char lowbound[dash - current_numbers + 1]; //+1 for null termination
+            memcpy(lowbound, current_numbers, dash - current_numbers);
+            lowbound[dash - current_numbers] = '\0';
+
+            current_numbers = dash + 1;
+            //printf("CurrentNm: %s\n", current_numbers);
+            char highbound[comma - current_numbers + 1]; //+1 for null termination
+            memcpy(highbound, current_numbers, comma - current_numbers);
+            highbound[comma - current_numbers] = '\0';
+            //printf("Lowbound : Highbound ::: %s : %s \n", lowbound, highbound);
+
+            for (int i = atoi(lowbound); i <= atoi(highbound); i++) {
+                send_chunk_patch(c, statlist[md5_s]->file, md5_s, i);
+            }
+        }
+        //Otherwise, if this is a single entry
+        else {
+            char specific[comma - current_numbers + 1]; //+1 for null termination
+            memcpy(specific, current_numbers, comma - current_numbers);
+            specific[comma - current_numbers] = '\0';
+            //printf("SINGLE: %d\n", atoi(specific));
+            send_chunk_patch(c, statlist[md5_s]->file, md5_s, atoi(specific));
+        }
+        current_numbers = comma + 1;
+        //If it's still possible to find a comma...
+        if (comma < bracket) comma = strchr(comma + 1, ',');
+        //If there's no more commas, try a bracket
+        if (comma == 0 && comma != bracket) {
+            comma = bracket;
+        }
+        //If we just did the above, it's time to end
+        else if (comma == bracket) comma = 0;
+    }
+    
+    //In the case of multiple patch requests, the last one
+    //will have the end tag. Once we're done with it, let the
+    //client know.
+    if (end) {
+        send_end_file(c, md5_s);
+    }
+}
+
+//Returns a vector of strings to send as patch requests.
+//There can potentially be a LOT of requests, so we need to
+//split them up by (chunk size) to be safe.
+std::vector<std::string> build_patch_requests(std::vector<int> missing_chunks, int chunk_size, std::string md5) {
+    std::vector<std::string> requests;
+
+    std::ostringstream builder;
+    builder << "/file-data:request:" << md5 << "{";
+    std::vector<int> stored_chunks;
+    int previous_chunk = missing_chunks.at(0); //Take first missing chunk as the prev value
+    //Here we'll read the numbers into sections
+    //ie: 0, 2, 5, 6-10, 14    
+    for (int i : missing_chunks) {
+        //If we're nearing the upper limit of the chunk size,
+        //split this off into a new section
+        //TODO: Make this more accurate
+        if (builder.str().length() > chunk_size - 20) {
+            //Replace the last comma with a bracket
+            std::string s = builder.str();
+            s.replace(s.length() - 1, 1, "}");
+            requests.push_back(s);
+            //Clear and reset the stringstream
+            builder.str(std::string());
+            builder << "/file-data:request:" << md5 << "{";
+        }
+
+        //If there's a gap between missing chunks, but
+        //a straight of them behind us
+        if ((previous_chunk + 1) < i) {
+            if (stored_chunks.size() == 0) {
+                stored_chunks.push_back(i);
+            }
+            else if (stored_chunks.size() == 1) {
+                builder << stored_chunks.back() << ",";
+                stored_chunks.pop_back();
+                stored_chunks.push_back(i);
+            }
+            else if (stored_chunks.size() > 1) {
+                builder << stored_chunks.at(0) << "-" << stored_chunks.at(stored_chunks.size() - 1) << ",";
+                stored_chunks.clear();
+                stored_chunks.push_back(i);
+            }
+        }
+        //If this is the next in a series of missing chunks
+        else if ((previous_chunk + 1) == i) {
+            stored_chunks.push_back(i);
+        }
+        //Otherwise, we're probably at the beginning of the parsing
+        else {
+            stored_chunks.push_back(i);
+        }
+        previous_chunk = i;
+    }
+
+    //Ugly, but here we deal with any un-inserted chunks after the loop
+    //That'll end up happening because it's a foreach loop
+    if (stored_chunks.size() == 1) {
+        builder << stored_chunks.back();
+        stored_chunks.pop_back();
+    }
+    else if (stored_chunks.size() > 1) {
+        builder << stored_chunks.at(0) << "-" << stored_chunks.at(stored_chunks.size() - 1);
+        stored_chunks.clear();
+    }
+
+    builder << "}:"; // <-- The colon signifies the last request to be sent
+
+    //printf("REQUEST: %s\n", builder.str().c_str());
+    
+    requests.push_back(builder.str());
+    return requests;
 }
 
 //Verify each individual piece of a file and return a list
@@ -137,11 +304,13 @@ std::vector<int> verify_chunks(std::string file, std::string super_md5) {
     while (input_file.read((char *)buffer, CHUNK_SIZE))
     {
         //printf("\"%s\" : \"%s\"", statlist[super_md5]->parts.at(i)->md5.c_str(), md5(buffer, input_file.gcount()).c_str());
-        if (md5(buffer, input_file.gcount()) != statlist[super_md5]->parts.at(i)->md5) {
-            //printf(" <-- !");
+        //If we don't even have the chunks yet it's obvious they're missing
+        if (statlist[super_md5]->parts[i] == 0) {
             missing.push_back(i);
         }
-        //printf("\n");
+        else if (md5(buffer, input_file.gcount()) != statlist[super_md5]->parts[i]->md5) {
+            missing.push_back(i);
+        }
         i++;
         bzero(buffer, CHUNK_SIZE);
     }
@@ -161,6 +330,7 @@ void send_end_file(Connection * c, std::string md5) {
 }
 
 int send_chunk_patch(Connection *c, std::string file, std::string file_md5, int chunk_number) {
+    //printf("Sending: %d\n", chunk_number);
     FILEPARTS f;
     char * header = build_chunk_header(file, file_md5, chunk_number, f);
     c->sendUDP(header, f.full_size);
@@ -322,7 +492,7 @@ FILEPARTS * get_chunk_from_header(char * header, int length) {
         printf("BPOINTER: %d\n", statlist[f->super_md5]);
     }
 
-    statlist[f->super_md5]->parts.push_back(f);// = f; //Set the proper index in the super array to equal us
+    statlist[f->super_md5]->parts[f->chunk_id] = f;// = f; //Set the proper index in the super array to equal us
     return f;
 }
 

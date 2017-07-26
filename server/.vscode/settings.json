@@ -29,6 +29,8 @@
         "functional": "cpp",
         "tuple": "cpp",
         "utility": "cpp",
-        "vector": "cpp"
+        "vector": "cpp",
+        "fstream": "cpp",
+        "iomanip": "cpp"
     }
 }

@@ -4,11 +4,12 @@
 #include <iostream>
 #include <string.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <fstream>
 #include <sstream>
 #include <iomanip>
 #include <openssl/md5.h>
-#include <tr1/unordered_map>
+#include <unordered_map>
 #include <vector>
 
 #include "server.h"
@@ -42,8 +43,13 @@ struct FILESTATS {
     int size;
     int chunk_size;
     int parts_number;
-    std::vector<FILEPARTS*> parts;
+    //std::vector<FILEPARTS*> parts;
+    //Map of currently in-progress downloads
+    std::unordered_map<int, FILEPARTS*> parts;
     std::string md5;
+
+    //Sending side
+    std::string file;
 
     ~FILESTATS() {
         //Free up our memory
@@ -65,9 +71,11 @@ int append_to_file(std::string file, char * buf, int length);
 FILEPARTS * get_chunk_from_header(char * header, int length);
 FILESTATS * get_super_header(char * header);
 int write_chunk_to_file(std::string file, char * buf, int length, int chunk_number, int chunk_size);
-void end_file_transmission(char*);
+void end_file_transmission(Connection * c, char*);
 void send_end_file(Connection * c, std::string md5);
 bool check_connection(Connection * c);
 void init_file(std::string);
 std::vector<int> verify_chunks(std::string, std::string);
+std::vector<std::string> build_patch_requests(std::vector<int> missing_chunks, int chunk_size, std::string md5);
+void parse_chunk_patch_request(Connection*, char*);
 #endif

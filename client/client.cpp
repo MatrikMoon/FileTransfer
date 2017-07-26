@@ -16,6 +16,8 @@ int main(int argc, char *argv[])
 
     sendTCPIntro(&server);
 
+    srand(time(0));
+    
 	//Create thread to receive data
     server.receiveTCP(&parseMessages);
 
