@@ -169,11 +169,18 @@ int parseUDPMessages(Server *c, char * buf, int length)
 int *getDesktopResolution()
 {
     Display *pdsp = XOpenDisplay(NULL);
-    Window wid = DefaultRootWindow(pdsp);
 
+    //Bail if there's no window manager
+    if (pdsp == 0) {
+        int *ret = new int[2];
+        ret[0] = 0;
+        ret[1] = 0;
+        return ret;
+    }
+
+    Window wid = DefaultRootWindow(pdsp);
     Screen *pwnd = DefaultScreenOfDisplay(pdsp);
     int sid = DefaultScreen(pdsp);
-
     XWindowAttributes xwAttr;
     XGetWindowAttributes(pdsp, wid, &xwAttr);
 
@@ -184,7 +191,6 @@ int *getDesktopResolution()
     int *ret = new int[2];
     ret[0] = xwAttr.width;
     ret[1] = xwAttr.height;
-
     XCloseDisplay(pdsp);
 
     return ret;
@@ -221,12 +227,15 @@ void m_rmouseUp() {
 void sendTCPIntro(Server * c) {
     char x[10];
     char y[10];
+
+    getDesktopResolution();
+
     itoa(getDesktopResolution()[0], x, 10);
     itoa(getDesktopResolution()[1], y, 10);
     
 	std::stringstream sends_res_x;
 	sends_res_x << "/add_x " << x;
-	c->sendTCP(sends_res_x.str());
+    c->sendTCP(sends_res_x.str());
 
 	std::stringstream sends_res_y;
 	sends_res_y << "/add_y " << y;

@@ -76,13 +76,14 @@ int parseFile(Connection *c, char * buf, int length) {
         else if (strncmp(buf, "/file-data:request:", 19) == 0) {
             parse_chunk_patch_request(c, buf);
         }
-        else if (strncmp(buf, "/file-data:end:", 15) == 0) {
+        else if (stnncmp(buf, "/file-data:end:", 15) == 0) {
             end_file_transmission(c, buf);
         }
     }
     else if (strncmp(buf, "/file-test", 10) == 0) {
         printf("SENDING: \"%s\"\n", &buf[11]);
         send_file(c, &buf[11]);
+        printf("SENT.\n");
     }
     return 1;
 }

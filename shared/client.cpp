@@ -96,7 +96,6 @@ void Client::sendTCP(char * buf) {
 }
 
 void Client::sendTCP(char * buf, int length) {
-
     //Append <EOF> to the end.
     char sends[length + 5]; //+5 for <EOF>
     memcpy(sends, buf, length); //Memcpy just in case of null bytes

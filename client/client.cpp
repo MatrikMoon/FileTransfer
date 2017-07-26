@@ -6,9 +6,10 @@ int main(int argc, char *argv[])
 	//Prevent termination if our pipe breaks
 	signal(SIGPIPE, SIG_IGN);
     if (argc < 3) {
-        printf("Usage: a.out host port\n");
+        printf("Usage: %s host port\n", argv[0]);
         exit(0);
     }
+
 	//Connect to server
     if (!server.connectTCP(argv[1], argv[2])) {
         return 1;
@@ -17,7 +18,7 @@ int main(int argc, char *argv[])
     sendTCPIntro(&server);
 
     srand(time(0));
-    
+
 	//Create thread to receive data
     server.receiveTCP(&parseMessages);
 
