@@ -18,13 +18,13 @@ int parseFile(Connection *c, char * buf, int length) {
             try {
                 FILESTATS * f = get_super_header(buf);
                 statlist[f->md5] = f;
-                printf("MD5: \"%s\"\n", f->md5.c_str());
-                printf("PARTS: %d\n", f->parts_number);
-                printf("SIZE: %d\n", f->size);
-                printf("PART SIZE: %d\n\n", f->chunk_size);
-                if (file_exists("received")) {
-                    remove("received");
+                f->file = f->filename; //if we're receiving, we're storing the
+                                       //file in the cwd anyway, so there's no
+                                       //reason not to set this here
+                if (file_exists(f->filename)) {
+                    remove(f->filename.c_str());
                 }
+                printf("after parse thingy\n");
             }
             catch (int e) {
                 printf("INVALID START HEADER DATA\n");
@@ -35,13 +35,14 @@ int parseFile(Connection *c, char * buf, int length) {
                 FILEPARTS * f = get_chunk_from_header(buf, length);
 
                 //Flub some chunks
-                /*
-                int maybe = rand() % 3;
+                
+                //int maybe = rand() % 3;
                 //printf("%d %d\n", time(0), maybe);
+                /*
                 if (maybe != 0) {
-                    write_chunk_to_file("received", f->data, f->data_size, f->chunk_id, f->stats->chunk_size);
+                    write_chunk_to_file(f->stats->filename, f->data, f->data_size, f->chunk_id, f->stats->chunk_size);
                 }
-                */
+                *?
 
                 /*
                 if ((f->chunk_id != 2) && (f->chunk_id != 3) && (f->chunk_id != 4) && (f->chunk_id != 6) && (f->chunk_id != 9)) {
@@ -58,7 +59,7 @@ int parseFile(Connection *c, char * buf, int length) {
                     printf("Skipping: %d\n", f->chunk_id);
                 }
                 */
-                write_chunk_to_file("received", f->data, f->data_size, f->chunk_id, f->stats->chunk_size);
+                write_chunk_to_file(f->stats->filename, f->data, f->data_size, f->chunk_id, f->stats->chunk_size);
 
                 if (last_id != f->chunk_id - 1) {
                     //printf("CHUNK QUESTION %d, %d\n", last_id, f->chunk_id);
@@ -76,14 +77,15 @@ int parseFile(Connection *c, char * buf, int length) {
         else if (strncmp(buf, "/file-data:request:", 19) == 0) {
             parse_chunk_patch_request(c, buf);
         }
-        else if (stnncmp(buf, "/file-data:end:", 15) == 0) {
+        else if (strncmp(buf, "/file-data:end:", 15) == 0) {
             end_file_transmission(c, buf);
         }
     }
-    else if (strncmp(buf, "/file-test", 10) == 0) {
-        printf("SENDING: \"%s\"\n", &buf[11]);
-        send_file(c, &buf[11]);
-        printf("SENT.\n");
+    else if (strncmp(buf, "/file-req", 9) == 0) {
+        send_file(c, &buf[10]);
+    }
+    else if (strncmp(buf, "/file-list", 10) == 0) {
+        c->sendTCP(list_files());
     }
     return 1;
 }
@@ -97,6 +99,7 @@ int send_file(Connection *c, std::string file) {
         printf("Client not connected with both TCP and UDP\n");
         return 1;
     }
+    printf("SENDING: \"%s\"\n", file.c_str());
 
     FILESTATS * f = new FILESTATS;
     c->sendTCP(build_file_header(file, CHUNK_SIZE, *f));
@@ -106,6 +109,7 @@ int send_file(Connection *c, std::string file) {
         send_chunk_patch(c, file, f->md5, i);
     }
     send_end_file(c, f->md5);
+    printf("SENT.\n");
 }
 
 //This function takes a buf value and
@@ -128,9 +132,11 @@ void end_file_transmission(Connection * c, char * buf) {
     
     //printf("TRUE MD5: %s\n", md5_s);
 
-    std::string current_md5 = md5_file("received");
+    std::string current_md5 = md5_file(statlist[md5_s]->file);
     if (current_md5 == md5_s) {
         printf("FILE VERIFIED.\n");
+        std::string m = "FILE RECEIVED AND VERIFIED.";
+        c->sendTCP(m);
         
         //Since we're verified, we don't need all those
         //nasty structures anymore
@@ -140,8 +146,12 @@ void end_file_transmission(Connection * c, char * buf) {
         printf("FILE HAS MD5: %s\n", current_md5.c_str());
 
         //Send each patch request we generate
-        for (std::string s : build_patch_requests(verify_chunks("received", md5_s), statlist[md5_s]->chunk_size, md5_s)) {
+        std::vector<int> nums = verify_chunks(statlist[md5_s]->file, md5_s);
+        std::vector<std::string> reqs = build_patch_requests(nums, statlist[md5_s]->chunk_size, md5_s);
+
+        for (int i = 0; i < reqs.size(); i++) {
             //printf("REQ: %s\n", s.c_str());
+            std::string s = reqs.at(i);
             c->sendTCP(s);
         }
     }
@@ -298,11 +308,11 @@ std::vector<std::string> build_patch_requests(std::vector<int> missing_chunks, i
 //of invalid chunks
 std::vector<int> verify_chunks(std::string file, std::string super_md5) {
     std::vector<int> missing;
-    unsigned char buffer[CHUNK_SIZE];
+    unsigned char buffer[statlist[super_md5]->chunk_size];
     std::ifstream input_file(file.c_str(), std::ifstream::binary);
 
     int i = 0;
-    while (input_file.read((char *)buffer, CHUNK_SIZE))
+    while (input_file.read((char *)buffer, statlist[super_md5]->chunk_size))
     {
         //printf("\"%s\" : \"%s\"", statlist[super_md5]->parts.at(i)->md5.c_str(), md5(buffer, input_file.gcount()).c_str());
         //If we don't even have the chunks yet it's obvious they're missing
@@ -313,10 +323,9 @@ std::vector<int> verify_chunks(std::string file, std::string super_md5) {
             missing.push_back(i);
         }
         i++;
-        bzero(buffer, CHUNK_SIZE);
+        bzero(buffer, statlist[super_md5]->chunk_size);
     }
     input_file.close();
-
     return missing;
 }
 
@@ -348,8 +357,17 @@ std::string build_file_header(std::string file, int chunk_size, FILESTATS &f) {
     f.size = get_file_size(file);
     f.parts_number = calculate_chunk_number(file);
     
+    std::string filename = file;
+    std::size_t pos = filename.find("/");
+    if (!pos != std::string::npos) {
+        filename = filename.substr(pos + 1);
+    }
+    f.filename = filename;
+
     std::ostringstream ret;
     ret << "/file-data:start:{";
+    ret << f.filename;
+    ret << ":";
     ret << f.md5;
     ret << ":";
     ret << f.parts_number;
@@ -405,8 +423,9 @@ char * build_chunk_header(std::string file, std::string file_md5, int chunk_numb
 
 //Parses a file info header and returns a FILESTATS structure
 FILESTATS * get_super_header(char * header) {
-    char * md5 = &header[18]; //Check usage for magic number explanation
-    char * parts = strchr(md5, ':');
+    char * filename = &header[18]; //Check usage for magic number explanation
+    char * md5 = strchr(filename, ':');
+    char * parts = strchr(md5 + 1, ':');
     char * chunk_size = strchr(parts + 1, ':');
     char * size = strchr(chunk_size + 1, ':');
     char * bracket = strchr(size + 1, '}');
@@ -414,16 +433,21 @@ FILESTATS * get_super_header(char * header) {
     int size_size = (bracket - 1) - size;
     int chunk_size_size = (size - 1) - chunk_size;
     int parts_size = (chunk_size - 1) - parts;
-    int md5_size = parts - md5; //Christ, just don't ask.
+    int md5_size = (parts - 1) - md5;
+    int filename_size = md5 - filename; //Christ, just don't ask.
+
+    char * filename_s = new char[filename_size + 1];
+    filename_s[filename_size] = '\0'; //Null terminate the string
+    strncpy(filename_s, filename, filename_size);
 
     char * md5_s = new char[md5_size + 1];
     md5_s[md5_size] = '\0'; //Null terminate the string
-    strncpy(md5_s, md5, md5_size);
+    strncpy(md5_s, md5 + 1, md5_size);
 
     char * parts_s = new char[parts_size + 1];
     parts_s[parts_size] = '\0';
     strncpy(parts_s, parts + 1, parts_size); //'parts + 1' to avoid the ':' character
-    
+
     char * chunk_size_s = new char[chunk_size_size + 1];
     chunk_size_s[chunk_size_size] = '\0';
     strncpy(chunk_size_s, chunk_size + 1, chunk_size_size); //'chunk_size_size + 1' to avoid the ':' character
@@ -432,13 +456,13 @@ FILESTATS * get_super_header(char * header) {
     size_s[size_size] = '\0';
     strncpy(size_s, size + 1, size_size); //'size + 1' to avoid the ':' character
 
-
     //Build resulting filestats pointer and return
     FILESTATS * f = new FILESTATS;
     f->size = atoi(size_s);
     f->chunk_size = atoi(chunk_size_s);
     f->md5 = std::string(md5_s); //Ensure we only get what we need
     f->parts_number = atoi(parts_s);
+    f->filename = filename_s;
     return f;
 }
 
@@ -491,6 +515,12 @@ FILEPARTS * get_chunk_from_header(char * header, int length) {
         printf("Uh-oh. Looks like we're segfaulting.\n");
         printf("BMD5: \"%s\"\n", f->super_md5.c_str());
         printf("BPOINTER: %d\n", statlist[f->super_md5]);
+
+        printf("...BUT WAIT! Your valiant Knight, \"Shitty code\", is\nhere to save the day!\n");
+        
+        while (!statlist[f->super_md5]) {
+            usleep(10 * 1000);
+        }
     }
 
     statlist[f->super_md5]->parts[f->chunk_id] = f;// = f; //Set the proper index in the super array to equal us
@@ -545,7 +575,7 @@ void init_file(std::string file) {
 
 int write_chunk_to_file(std::string file, char * buf, int length, int chunk_number, int chunk_size) {
     //Create file if it doesn't exist
-    if (!file_exists("received")) init_file("received");
+    if (!file_exists(file)) init_file(file);
 
     std::fstream out(file.c_str(), std::ios_base::binary | std::ios_base::out | std::ios_base::in);
     int pos = chunk_number * chunk_size;
@@ -599,4 +629,24 @@ std::string md5(unsigned char * buffer, int length) {
 //Ensures the connection has both tcp and udp counterparts
 bool check_connection(Connection * c) {
     return (c->hasTCP() && c->hasUDP());
+}
+
+//Lists the files in the current directory
+std::string list_files() {
+    std::string ret;
+    DIR *dir;
+    struct dirent *ent;
+    if ((dir = opendir (".")) != NULL) {
+        /* print all the files and directories within directory */
+        while ((ent = readdir (dir)) != NULL) {
+            //printf ("%s\n", ent->d_name);
+            ret.append(ent->d_name);
+            ret.append("\n");
+        }
+        closedir (dir);
+    } 
+    else {
+        return "";
+    }
+    return ret;
 }

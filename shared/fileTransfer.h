@@ -11,6 +11,10 @@
 #include <openssl/md5.h>
 #include <unordered_map>
 #include <vector>
+#include <dirent.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <unistd.h>
 
 #include "server.h"
 
@@ -47,9 +51,8 @@ struct FILESTATS {
     //Map of currently in-progress downloads
     std::unordered_map<int, FILEPARTS*> parts;
     std::string md5;
-
-    //Sending side
-    std::string file;
+    std::string file; //can potentially hold full path, mostly used on sending side
+    std::string filename; //can only hold file names, mostly used on receiving side
 
     ~FILESTATS() {
         //Free up our memory
@@ -78,4 +81,5 @@ void init_file(std::string);
 std::vector<int> verify_chunks(std::string, std::string);
 std::vector<std::string> build_patch_requests(std::vector<int> missing_chunks, int chunk_size, std::string md5);
 void parse_chunk_patch_request(Connection*, char*);
+std::string list_files();
 #endif

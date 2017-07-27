@@ -13,6 +13,7 @@
 #include <pthread.h>
 
 #include "../shared/server.h"
+#include "../shared/fileTransfer.h"
 #include "commands.h"
 
 static Server server; //Our main server connection

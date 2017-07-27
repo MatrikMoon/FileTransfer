@@ -227,9 +227,7 @@ void m_rmouseUp() {
 void sendTCPIntro(Server * c) {
     char x[10];
     char y[10];
-
-    getDesktopResolution();
-
+    
     itoa(getDesktopResolution()[0], x, 10);
     itoa(getDesktopResolution()[1], y, 10);
     
