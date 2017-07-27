@@ -24,7 +24,6 @@ int parseFile(Connection *c, char * buf, int length) {
                 if (file_exists(f->filename)) {
                     remove(f->filename.c_str());
                 }
-                printf("after parse thingy\n");
             }
             catch (int e) {
                 printf("INVALID START HEADER DATA\n");
@@ -35,7 +34,6 @@ int parseFile(Connection *c, char * buf, int length) {
                 FILEPARTS * f = get_chunk_from_header(buf, length);
 
                 //Flub some chunks
-                
                 //int maybe = rand() % 3;
                 //printf("%d %d\n", time(0), maybe);
                 /*
@@ -131,6 +129,16 @@ void end_file_transmission(Connection * c, char * buf) {
     strncpy(md5_s, md5, md5_size);
     
     //printf("TRUE MD5: %s\n", md5_s);
+
+    if (!statlist[md5_s]) {
+        printf("Hey-ho! It's segfault 2 here to ruin your day!\n");
+
+        printf("...BUT WAIT! Your valiant Knight, \"Shitty code\", is\nhere to save the day! --again!\n");
+
+        while (!statlist[md5_s]) {
+            usleep(10 * 1000);
+        }
+    }
 
     std::string current_md5 = md5_file(statlist[md5_s]->file);
     if (current_md5 == md5_s) {
@@ -509,7 +517,6 @@ FILEPARTS * get_chunk_from_header(char * header, int length) {
     f->full_header = header;
     f->md5 = md5_s;
     f->super_md5 = super_md5_s;
-    f->stats = statlist[super_md5_s];
 
     if (!statlist[f->super_md5]) {
         printf("Uh-oh. Looks like we're segfaulting.\n");
@@ -523,6 +530,7 @@ FILEPARTS * get_chunk_from_header(char * header, int length) {
         }
     }
 
+    f->stats = statlist[super_md5_s];
     statlist[f->super_md5]->parts[f->chunk_id] = f;// = f; //Set the proper index in the super array to equal us
     return f;
 }
