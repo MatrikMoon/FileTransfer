@@ -34,7 +34,7 @@ int main(int argc, char *argv[])
     }
 
     server.receiveUDP(&parseUDPMessages);
-
+    
 	//Loop for input
     while (true) {
         char buffer[BUFLEN];

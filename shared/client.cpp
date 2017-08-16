@@ -101,6 +101,8 @@ void Client::sendTCP(char * buf, int length) {
     memcpy(sends, buf, length); //Memcpy just in case of null bytes
     strcpy(&sends[length], "<EOF>"); //Copy it over
 
+    printf("SEND TCP: %s\n", sends);
+
     int n = write(sockfd, sends, length + 5);
     if (n < 0) {
         error("Error writing to socket.");
@@ -308,6 +310,7 @@ void Client::sendUDP(char * buf)
 
 void Client::sendUDP(char * buf, int length)
 {
+    printf("SEND UDP: %s\n", buf);
     int n = sendto(sock, buf, length, 0, (struct sockaddr *)&from, fromlen);
     if (n < 0)
     {

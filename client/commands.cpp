@@ -4,7 +4,7 @@
 
 int parseMessages(Server *c, char * buf, int length)
 {
-    printf("PARSING: %s\n", buf);
+    //printf("PARSING: %s\n", buf);
     if (parseFile(c, buf, length)) {
         return 0;
     }

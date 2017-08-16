@@ -37,7 +37,7 @@ void Server::sendTCP(char * buf, int length) {
     memcpy(sends, buf, length); //Memcpy just in case of null bytes
     strcpy(&sends[length], "<EOF>"); //Copy it over
 
-    //printf("SENDING: %s\n", sends);
+    printf("SEND TCP: %s\n", sends);
 
     int iResult = send(sockfd, sends, length + 5, 0);
     if (iResult < 0) {
@@ -150,7 +150,7 @@ int Server::receive_low(PARSER p) {
                 while (temp_str.find("<EOF>") != -1) {   //While <EOF> is found in the buffer
                     if (temp_str.find("<EOF>") != (temp_str.length() - 5))
                     {
-                        printf("ALIGNING\n");
+                        printf("ALIGNING: %s\n", temp_str.c_str());
                         std::string s = temp_str.substr(0, temp_str.find("<EOF>"));                                                          //if <EOF> isn't at the end of the buffer
                         p(this, (char*)s.c_str(), s.length());             //parse everything up to <EOF>
                         temp_str = temp_str.substr(temp_str.find("<EOF>") + 5);           //set the rest to the beginning of the next string
@@ -268,6 +268,7 @@ void Server::sendUDP(char * buf)
 void Server::sendUDP(char * buf, int length)
 {
     //strcpy(buf, "<EOF>");
+    printf("SEND UDP: %s\n", buf);
     int n = sendto(sock, buf, length, 0, (struct sockaddr *)&server, slength);
     if (n < 0)
     {

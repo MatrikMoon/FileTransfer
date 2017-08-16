@@ -9,6 +9,7 @@ bool done = false;
 std::unordered_map<std::string, FILESTATS*> statlist;
 
 int parseFile(Connection *c, char * buf, int length) {
+    printf("%s\n", buf);
     //Ensure we don't waste processing time if it's not a file
     if (strncmp(buf, "/file", 5) != 0) {
         return 0;
@@ -73,6 +74,7 @@ int parseFile(Connection *c, char * buf, int length) {
             }
         }
         else if (strncmp(buf, "/file-data:request:", 19) == 0) {
+            printf("req: %s\n", buf);
             parse_chunk_patch_request(c, buf);
         }
         else if (strncmp(buf, "/file-data:end:", 15) == 0) {
@@ -84,6 +86,11 @@ int parseFile(Connection *c, char * buf, int length) {
     }
     else if (strncmp(buf, "/file-list", 10) == 0) {
         c->sendTCP(list_files());
+    }
+    else if (strncmp(buf, "/file-notification", 18) == 0) {
+        printf("%s\n", &buf[19]);
+        char e[100];
+        strcpy(e, &buf[19]);
     }
     return 1;
 }
@@ -97,7 +104,7 @@ int send_file(Connection *c, std::string file) {
         printf("Client not connected with both TCP and UDP\n");
         return 1;
     }
-    printf("SENDING: \"%s\"\n", file.c_str());
+    //printf("SENDING: \"%s\"\n", file.c_str());
 
     FILESTATS * f = new FILESTATS;
     c->sendTCP(build_file_header(file, CHUNK_SIZE, *f));
@@ -143,7 +150,7 @@ void end_file_transmission(Connection * c, char * buf) {
     std::string current_md5 = md5_file(statlist[md5_s]->file);
     if (current_md5 == md5_s) {
         printf("FILE VERIFIED.\n");
-        std::string m = "FILE RECEIVED AND VERIFIED.";
+        std::string m = "/file-notification FILE RECEIVED AND VERIFIED.";
         c->sendTCP(m);
         
         //Since we're verified, we don't need all those
@@ -322,18 +329,35 @@ std::vector<int> verify_chunks(std::string file, std::string super_md5) {
     int i = 0;
     while (input_file.read((char *)buffer, statlist[super_md5]->chunk_size))
     {
-        //printf("\"%s\" : \"%s\"", statlist[super_md5]->parts.at(i)->md5.c_str(), md5(buffer, input_file.gcount()).c_str());
         //If we don't even have the chunks yet it's obvious they're missing
+        /*
+        if (!statlist[super_md5]->parts[i] == 0) {
+            printf("%d : \"%s\" : \"%s\"", i, statlist[super_md5]->parts[i]->md5.c_str(), md5(buffer, input_file.gcount()).c_str());
+        }
+        else printf("[EMPTY] : [EMPTY]");
+        */
         if (statlist[super_md5]->parts[i] == 0) {
             missing.push_back(i);
         }
         else if (md5(buffer, input_file.gcount()) != statlist[super_md5]->parts[i]->md5) {
             missing.push_back(i);
+            //printf(" <--");
         }
+        //printf("\n");
         i++;
         bzero(buffer, statlist[super_md5]->chunk_size);
     }
     input_file.close();
+
+    //If the file isnt big enough, we haven't even seen the last
+    //chunk yet! Let's add an entry for all the rest of the missing
+    //stuff.
+    if (statlist[super_md5]->parts_number > i) {
+        for (; i < statlist[super_md5]->parts_number; i++) {
+            missing.push_back(i);
+        }
+    }
+
     return missing;
 }
 

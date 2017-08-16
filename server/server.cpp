@@ -7,12 +7,12 @@
 
 int parseMessages(Client *c, char * buf, int length) {
     parseFile(c, buf, length);
-    printf("INSIDE PARSE: %s\n", buf);
+    //printf("TCP: %s\n", buf);
 }
 
 int parseMessagesUDP(Client *c, char * buf, int length)  {
     parseFile(c, buf, length);
-    //printf("INSIDE PARSE UDP: %s\n", buf);
+    //printf("UDP: %s\n", buf);
 }
 
 int main(int argc, char *argv[])
