@@ -1,5 +1,8 @@
 # A simple (and somewhat dirty) sockets wrapper for linux
 
+# EDIT: This socket wrapper turned into a file transfer program. I'll fork from an old point before
+# the change and create a new repo for only the wrapper.
+
 TODO:
 Ensure <EOF> parsing can handle null bytes
 
